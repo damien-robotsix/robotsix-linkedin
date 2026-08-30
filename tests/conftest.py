@@ -5,7 +5,22 @@ from __future__ import annotations
 import pytest
 from httpx import ASGITransport, AsyncClient
 
+from linkedin_service import auth
 from linkedin_service.app import app
+
+
+@pytest.fixture(autouse=True)
+def reset_token_state(tmp_path):
+    """Reset the module-level token store between tests for isolation."""
+    # Point persistence at an isolated temp file so tests never read or
+    # write the operator's real token file.
+    auth.settings.linkedin_token_file = str(tmp_path / "tokens.json")
+    auth.tokens.access_token = ""
+    auth.tokens.refresh_token = ""
+    auth.tokens.expires_at = 0.0
+    auth.tokens.state = ""
+    auth._pending_confirmations.clear()
+    yield
 
 
 @pytest.fixture

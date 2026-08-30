@@ -6,9 +6,13 @@ endpoints so the service still boots and /health passes.
 
 from __future__ import annotations
 
+import json
+import os
 import secrets
+import time
 import urllib.parse
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 import httpx
@@ -21,17 +25,94 @@ ACCESS_TOKEN_URL = "https://www.linkedin.com/oauth/v2/accessToken"
 API_BASE = "https://api.linkedin.com/v2"
 
 
+class LinkedInAPIError(RuntimeError):
+    """Raised when LinkedIn returns a non-2xx response.
+
+    Carries the HTTP status and response body so callers can surface the
+    underlying LinkedIn error to operators instead of an opaque failure.
+    """
+
+    def __init__(self, status_code: int, body: str) -> None:
+        self.status_code = status_code
+        self.body = body
+        super().__init__(f"LinkedIn API returned {status_code}: {body}")
+
+
+def _raise_for_status(resp: httpx.Response) -> None:
+    """Raise :class:`LinkedInAPIError` with the response body on error."""
+    if resp.is_error:
+        raise LinkedInAPIError(resp.status_code, resp.text)
+
+
 @dataclass
 class TokenStore:
-    """In-memory token storage (swap for EnvStore / vault in production)."""
+    """Token storage backed by an on-disk file outside the repo.
+
+    Access/refresh tokens are loaded on startup and re-persisted whenever
+    they change, so operators do not have to repeat the OAuth consent flow
+    after a restart. The file is written 0600 inside a 0700 directory and
+    token values are never logged.
+    """
 
     access_token: str = ""
     refresh_token: str = ""
     expires_at: float = 0.0  # unix timestamp
     state: str = ""
 
+    def _persisted_dict(self) -> dict[str, Any]:
+        """Return the subset of fields that survive a restart.
+
+        ``state`` is a per-flow CSRF nonce and is deliberately excluded.
+        """
+        return {
+            "access_token": self.access_token,
+            "refresh_token": self.refresh_token,
+            "expires_at": self.expires_at,
+        }
+
+    def save(self, path: str | None = None) -> None:
+        """Persist tokens to disk (0600 file inside a 0700 directory).
+
+        No-op when no token file is configured. Token values are never
+        written to logs.
+        """
+        target = path if path is not None else settings.linkedin_token_file
+        if not target:
+            return
+        file_path = Path(target).expanduser()
+        parent = file_path.parent
+        parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+        os.chmod(parent, 0o700)
+        fd = os.open(
+            str(file_path),
+            os.O_WRONLY | os.O_CREAT | os.O_TRUNC,
+            0o600,
+        )
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            json.dump(self._persisted_dict(), fh)
+        os.chmod(file_path, 0o600)
+
+    def load(self, path: str | None = None) -> None:
+        """Load persisted tokens on startup. No-op when the file is absent."""
+        target = path if path is not None else settings.linkedin_token_file
+        if not target:
+            return
+        file_path = Path(target).expanduser()
+        if not file_path.exists():
+            return
+        try:
+            data = json.loads(file_path.read_text(encoding="utf-8"))
+        except (ValueError, OSError):
+            return
+        self.access_token = data.get("access_token", "")
+        self.refresh_token = data.get("refresh_token", "")
+        self.expires_at = float(data.get("expires_at", 0.0))
+
 
 tokens = TokenStore()
+# Load any previously persisted tokens so a restart does not force the
+# operator to redo the OAuth consent flow.
+tokens.load()
 
 # Pending confirmation tokens for write operations.
 _pending_confirmations: dict[str, dict[str, Any]] = {}
@@ -53,15 +134,27 @@ def consume_confirmation_token(token: str) -> dict[str, Any] | None:
 # Auth flow helpers
 # ---------------------------------------------------------------------------
 
+def validate_redirect_uri(uri: str) -> None:
+    """Ensure ``uri`` is on the configured allowlist.
+
+    Raises :class:`ValueError` when the redirect URI is not permitted,
+    guarding against open-redirect / token-exfiltration attacks.
+    """
+    if uri not in settings.allowed_redirect_uris_list:
+        raise ValueError(f"redirect_uri {uri!r} is not on the allowlist.")
+
+
 def build_authorize_url() -> str:
     """Return the LinkedIn consent-screen URL.
 
-    Raises RuntimeError if credentials are not configured.
+    Raises RuntimeError if credentials are not configured and ValueError if
+    the configured redirect URI is not on the allowlist.
     """
     if not settings.auth_configured:
         raise RuntimeError(
             "LinkedIn client credentials are not configured."
         )
+    validate_redirect_uri(settings.linkedin_redirect_uri)
     state = secrets.token_urlsafe(16)
     tokens.state = state
     params = {
@@ -84,6 +177,7 @@ async def exchange_code(
     """
     if state != tokens.state:
         raise ValueError("OAuth state mismatch — possible CSRF.")
+    validate_redirect_uri(settings.linkedin_redirect_uri)
     async with httpx.AsyncClient() as client:
         resp = await client.post(
             ACCESS_TOKEN_URL,
@@ -96,11 +190,12 @@ async def exchange_code(
             },
             headers={"Content-Type": "application/x-www-form-urlencoded"},
         )
-        resp.raise_for_status()
+        _raise_for_status(resp)
     data: dict[str, Any] = resp.json()
     tokens.access_token = data["access_token"]
     tokens.refresh_token = data.get("refresh_token", "")
-    tokens.expires_at = data.get("expires_in", 0)
+    tokens.expires_at = time.time() + float(data.get("expires_in", 0))
+    tokens.save()
     return data
 
 
@@ -119,11 +214,12 @@ async def refresh_access_token() -> dict[str, Any]:
             },
             headers={"Content-Type": "application/x-www-form-urlencoded"},
         )
-        resp.raise_for_status()
+        _raise_for_status(resp)
     data: dict[str, Any] = resp.json()
     tokens.access_token = data["access_token"]
     tokens.refresh_token = data.get("refresh_token", tokens.refresh_token)
-    tokens.expires_at = data.get("expires_in", 0)
+    tokens.expires_at = time.time() + float(data.get("expires_in", 0))
+    tokens.save()
     return data
 
 
@@ -144,7 +240,7 @@ async def get_profile() -> dict[str, Any]:
         resp = await client.get(
             f"{API_BASE}/userinfo", headers=_auth_headers()
         )
-        resp.raise_for_status()
+        _raise_for_status(resp)
     result: dict[str, Any] = resp.json()
     return result
 
@@ -179,6 +275,14 @@ async def share_content(
             json=payload,
             headers=_auth_headers(),
         )
-        resp.raise_for_status()
-    result: dict[str, Any] = resp.json()
-    return result
+        _raise_for_status(resp)
+    # LinkedIn returns the created post URN in the X-RestLi-Id header; the
+    # body may also carry an "id". Prefer the header, fall back to the body.
+    body: dict[str, Any] = {}
+    if resp.content:
+        try:
+            body = resp.json()
+        except ValueError:
+            body = {}
+    urn = resp.headers.get("x-restli-id") or body.get("id")
+    return {"id": urn, "urn": urn, "author": person_urn, "response": body}
