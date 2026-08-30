@@ -30,6 +30,12 @@ class Settings(BaseSettings):
     # w_member_social is needed for posting / sharing.
     linkedin_scopes: str = "openid profile email w_member_social"
 
+    # Path to the file where OAuth access/refresh tokens are persisted.
+    # Kept OUTSIDE the repository so tokens survive restarts without being
+    # committed. Written 0600 inside a 0700 directory; token values are
+    # never logged. Set to an empty string to disable on-disk persistence.
+    linkedin_token_file: str = "~/.config/linkedin-service/tokens.json"
+
     # --- Service ---
     host: str = "0.0.0.0"
     port: int = 8000

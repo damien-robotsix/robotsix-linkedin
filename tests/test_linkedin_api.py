@@ -5,6 +5,8 @@ Live LinkedIn calls are not possible in CI, so httpx is mocked.
 
 from __future__ import annotations
 
+import os
+import stat
 from typing import Any
 
 import httpx
@@ -191,3 +193,52 @@ async def test_share_content_surfaces_api_error(monkeypatch: pytest.MonkeyPatch)
         await auth.share_content("hello", "PUBLIC")
     assert exc.value.status_code == 403
     assert "permissions" in str(exc.value)
+
+
+# ---------------------------------------------------------------------------
+# Token persistence
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_exchange_code_persists_tokens_to_file(
+    monkeypatch: pytest.MonkeyPatch, _credentials: None
+) -> None:
+    response = _FakeResponse(
+        json_data={
+            "access_token": "abc123",
+            "refresh_token": "refresh123",
+            "expires_in": 3600,
+        }
+    )
+    _patch_client(monkeypatch, response)
+    auth.tokens.state = "s"
+
+    await auth.exchange_code("code", "s")
+
+    token_path = settings.linkedin_token_file
+    assert os.path.exists(token_path)
+    # File must be 0600 inside a 0700 directory.
+    assert stat.S_IMODE(os.stat(token_path).st_mode) == 0o600
+    assert stat.S_IMODE(os.stat(os.path.dirname(token_path)).st_mode) == 0o700
+
+    # A fresh TokenStore loading the same file recovers the tokens,
+    # proving they survive a restart.
+    fresh = auth.TokenStore()
+    fresh.load()
+    assert fresh.access_token == "abc123"
+    assert fresh.refresh_token == "refresh123"
+    # The CSRF state nonce is not persisted.
+    assert fresh.state == ""
+
+
+def test_token_store_save_load_roundtrip() -> None:
+    store = auth.TokenStore(
+        access_token="a", refresh_token="r", expires_at=123.0, state="nonce"
+    )
+    store.save()
+
+    loaded = auth.TokenStore()
+    loaded.load()
+    assert loaded.access_token == "a"
+    assert loaded.refresh_token == "r"
+    assert loaded.expires_at == 123.0

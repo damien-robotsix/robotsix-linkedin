@@ -6,10 +6,13 @@ endpoints so the service still boots and /health passes.
 
 from __future__ import annotations
 
+import json
+import os
 import secrets
 import time
 import urllib.parse
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 import httpx
@@ -43,15 +46,73 @@ def _raise_for_status(resp: httpx.Response) -> None:
 
 @dataclass
 class TokenStore:
-    """In-memory token storage (swap for EnvStore / vault in production)."""
+    """Token storage backed by an on-disk file outside the repo.
+
+    Access/refresh tokens are loaded on startup and re-persisted whenever
+    they change, so operators do not have to repeat the OAuth consent flow
+    after a restart. The file is written 0600 inside a 0700 directory and
+    token values are never logged.
+    """
 
     access_token: str = ""
     refresh_token: str = ""
     expires_at: float = 0.0  # unix timestamp
     state: str = ""
 
+    def _persisted_dict(self) -> dict[str, Any]:
+        """Return the subset of fields that survive a restart.
+
+        ``state`` is a per-flow CSRF nonce and is deliberately excluded.
+        """
+        return {
+            "access_token": self.access_token,
+            "refresh_token": self.refresh_token,
+            "expires_at": self.expires_at,
+        }
+
+    def save(self, path: str | None = None) -> None:
+        """Persist tokens to disk (0600 file inside a 0700 directory).
+
+        No-op when no token file is configured. Token values are never
+        written to logs.
+        """
+        target = path if path is not None else settings.linkedin_token_file
+        if not target:
+            return
+        file_path = Path(target).expanduser()
+        parent = file_path.parent
+        parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+        os.chmod(parent, 0o700)
+        fd = os.open(
+            str(file_path),
+            os.O_WRONLY | os.O_CREAT | os.O_TRUNC,
+            0o600,
+        )
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            json.dump(self._persisted_dict(), fh)
+        os.chmod(file_path, 0o600)
+
+    def load(self, path: str | None = None) -> None:
+        """Load persisted tokens on startup. No-op when the file is absent."""
+        target = path if path is not None else settings.linkedin_token_file
+        if not target:
+            return
+        file_path = Path(target).expanduser()
+        if not file_path.exists():
+            return
+        try:
+            data = json.loads(file_path.read_text(encoding="utf-8"))
+        except (ValueError, OSError):
+            return
+        self.access_token = data.get("access_token", "")
+        self.refresh_token = data.get("refresh_token", "")
+        self.expires_at = float(data.get("expires_at", 0.0))
+
 
 tokens = TokenStore()
+# Load any previously persisted tokens so a restart does not force the
+# operator to redo the OAuth consent flow.
+tokens.load()
 
 # Pending confirmation tokens for write operations.
 _pending_confirmations: dict[str, dict[str, Any]] = {}
@@ -134,6 +195,7 @@ async def exchange_code(
     tokens.access_token = data["access_token"]
     tokens.refresh_token = data.get("refresh_token", "")
     tokens.expires_at = time.time() + float(data.get("expires_in", 0))
+    tokens.save()
     return data
 
 
@@ -157,6 +219,7 @@ async def refresh_access_token() -> dict[str, Any]:
     tokens.access_token = data["access_token"]
     tokens.refresh_token = data.get("refresh_token", tokens.refresh_token)
     tokens.expires_at = time.time() + float(data.get("expires_in", 0))
+    tokens.save()
     return data
 
 

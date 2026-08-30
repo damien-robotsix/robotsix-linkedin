@@ -52,6 +52,7 @@ values only — never commit a populated `.env` (it is git-ignored).
 | `LINKEDIN_REDIRECT_URI`                       | No       | `http://localhost:8000/auth/callback` | OAuth redirect URI                          |
 | `LINKEDIN_ALLOWED_REDIRECT_URIS`              | No       | `""`                                  | Extra allowed redirect URIs (space/comma)   |
 | `LINKEDIN_SCOPES`                             | No       | `openid profile email w_member_social`| Space-separated scope list                  |
+| `LINKEDIN_TOKEN_FILE`                         | No       | `~/.config/linkedin-service/tokens.json` | File (outside the repo) where tokens persist; `0600` in a `0700` dir. Empty disables persistence |
 | `LINKEDIN_HOST`                               | No       | `0.0.0.0`                             | Bind host                                   |
 | `LINKEDIN_PORT`                               | No       | `8000`                                | Bind port                                   |
 | `LINKEDIN_REQUIRE_OPERATOR_CONFIRMATION`      | No       | `True`                                | Require confirmation for writes             |
