@@ -7,6 +7,7 @@ endpoints so the service still boots and /health passes.
 from __future__ import annotations
 
 import secrets
+import time
 import urllib.parse
 from dataclasses import dataclass
 from typing import Any
@@ -19,6 +20,25 @@ from .config import settings
 AUTHORIZE_URL = "https://www.linkedin.com/oauth/v2/authorization"
 ACCESS_TOKEN_URL = "https://www.linkedin.com/oauth/v2/accessToken"
 API_BASE = "https://api.linkedin.com/v2"
+
+
+class LinkedInAPIError(RuntimeError):
+    """Raised when LinkedIn returns a non-2xx response.
+
+    Carries the HTTP status and response body so callers can surface the
+    underlying LinkedIn error to operators instead of an opaque failure.
+    """
+
+    def __init__(self, status_code: int, body: str) -> None:
+        self.status_code = status_code
+        self.body = body
+        super().__init__(f"LinkedIn API returned {status_code}: {body}")
+
+
+def _raise_for_status(resp: httpx.Response) -> None:
+    """Raise :class:`LinkedInAPIError` with the response body on error."""
+    if resp.is_error:
+        raise LinkedInAPIError(resp.status_code, resp.text)
 
 
 @dataclass
@@ -53,15 +73,27 @@ def consume_confirmation_token(token: str) -> dict[str, Any] | None:
 # Auth flow helpers
 # ---------------------------------------------------------------------------
 
+def validate_redirect_uri(uri: str) -> None:
+    """Ensure ``uri`` is on the configured allowlist.
+
+    Raises :class:`ValueError` when the redirect URI is not permitted,
+    guarding against open-redirect / token-exfiltration attacks.
+    """
+    if uri not in settings.allowed_redirect_uris_list:
+        raise ValueError(f"redirect_uri {uri!r} is not on the allowlist.")
+
+
 def build_authorize_url() -> str:
     """Return the LinkedIn consent-screen URL.
 
-    Raises RuntimeError if credentials are not configured.
+    Raises RuntimeError if credentials are not configured and ValueError if
+    the configured redirect URI is not on the allowlist.
     """
     if not settings.auth_configured:
         raise RuntimeError(
             "LinkedIn client credentials are not configured."
         )
+    validate_redirect_uri(settings.linkedin_redirect_uri)
     state = secrets.token_urlsafe(16)
     tokens.state = state
     params = {
@@ -84,6 +116,7 @@ async def exchange_code(
     """
     if state != tokens.state:
         raise ValueError("OAuth state mismatch — possible CSRF.")
+    validate_redirect_uri(settings.linkedin_redirect_uri)
     async with httpx.AsyncClient() as client:
         resp = await client.post(
             ACCESS_TOKEN_URL,
@@ -96,11 +129,11 @@ async def exchange_code(
             },
             headers={"Content-Type": "application/x-www-form-urlencoded"},
         )
-        resp.raise_for_status()
+        _raise_for_status(resp)
     data: dict[str, Any] = resp.json()
     tokens.access_token = data["access_token"]
     tokens.refresh_token = data.get("refresh_token", "")
-    tokens.expires_at = data.get("expires_in", 0)
+    tokens.expires_at = time.time() + float(data.get("expires_in", 0))
     return data
 
 
@@ -119,11 +152,11 @@ async def refresh_access_token() -> dict[str, Any]:
             },
             headers={"Content-Type": "application/x-www-form-urlencoded"},
         )
-        resp.raise_for_status()
+        _raise_for_status(resp)
     data: dict[str, Any] = resp.json()
     tokens.access_token = data["access_token"]
     tokens.refresh_token = data.get("refresh_token", tokens.refresh_token)
-    tokens.expires_at = data.get("expires_in", 0)
+    tokens.expires_at = time.time() + float(data.get("expires_in", 0))
     return data
 
 
@@ -144,7 +177,7 @@ async def get_profile() -> dict[str, Any]:
         resp = await client.get(
             f"{API_BASE}/userinfo", headers=_auth_headers()
         )
-        resp.raise_for_status()
+        _raise_for_status(resp)
     result: dict[str, Any] = resp.json()
     return result
 
@@ -179,6 +212,14 @@ async def share_content(
             json=payload,
             headers=_auth_headers(),
         )
-        resp.raise_for_status()
-    result: dict[str, Any] = resp.json()
-    return result
+        _raise_for_status(resp)
+    # LinkedIn returns the created post URN in the X-RestLi-Id header; the
+    # body may also carry an "id". Prefer the header, fall back to the body.
+    body: dict[str, Any] = {}
+    if resp.content:
+        try:
+            body = resp.json()
+        except ValueError:
+            body = {}
+    urn = resp.headers.get("x-restli-id") or body.get("id")
+    return {"id": urn, "urn": urn, "author": person_urn, "response": body}

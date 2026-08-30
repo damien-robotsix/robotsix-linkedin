@@ -27,6 +27,8 @@ Thumbs.db
 # Environment / secrets
 .env
 .env.*
+# ...but keep the documented placeholder template tracked
+!.env.example
 
 # Coverage
 htmlcov/
