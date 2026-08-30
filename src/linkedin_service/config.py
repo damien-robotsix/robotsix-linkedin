@@ -37,7 +37,7 @@ class Settings(BaseSettings):
 
     @property
     def linkedin_scopes_list(self) -> list[str]:
-        return [s.strip() for s in self.linkedin_scopes.split(",") if s.strip()]
+        return self.linkedin_scopes.split()
 
     @property
     def auth_configured(self) -> bool:
