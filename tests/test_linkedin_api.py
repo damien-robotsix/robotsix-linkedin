@@ -11,6 +11,7 @@ from typing import Any
 
 import httpx
 import pytest
+from pydantic import SecretStr
 
 from linkedin_service import auth
 from linkedin_service.config import settings
@@ -71,8 +72,8 @@ def _patch_client(monkeypatch: pytest.MonkeyPatch, response: _FakeResponse) -> _
 
 @pytest.fixture
 def _credentials(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(settings, "linkedin_client_id", "cid")
-    monkeypatch.setattr(settings, "linkedin_client_secret", "csecret")
+    monkeypatch.setattr(settings, "linkedin_client_id", SecretStr("cid"))
+    monkeypatch.setattr(settings, "linkedin_client_secret", SecretStr("csecret"))
 
 
 # ---------------------------------------------------------------------------

@@ -13,9 +13,11 @@ robotsix fleet environment.
 
 ## 1. Prepare the config file
 
-The service reads its settings from `config/config.json`. The deploy plane
-injects this file into the container at the path declared by the
-`robotsix.deploy.config-target` label (`/app/config/config.json`).
+The service reads its settings from a single JSON file (`config/config.json`).
+There is no environment-variable overlay — the file is the sole source of
+truth. The deploy plane injects this file into the container at the path
+declared by the `robotsix.deploy.config-target` label
+(`/app/config/config.json`).
 
 Create a `config/config.json` on your deploy host (or in your config store)
 using the template below. **Replace the placeholder values with real
@@ -39,8 +41,8 @@ credentials — never commit real secrets to the repository.**
 
 | Field | Required | Description |
 |---|---|---|
-| `linkedin_client_id` | Yes | OAuth 2.0 client ID from the LinkedIn Developer Portal. Marked `secret` in the schema — the deploy plane reads it from a secure store. |
-| `linkedin_client_secret` | Yes | OAuth 2.0 client secret. Marked `secret` and `writeOnly` — never logged or echoed. |
+| `linkedin_client_id` | Yes | OAuth 2.0 client ID from the LinkedIn Developer Portal. Secret — masked in API responses, `writeOnly` in the schema. |
+| `linkedin_client_secret` | Yes | OAuth 2.0 client secret. Secret — masked in API responses, `writeOnly` in the schema. |
 | `linkedin_redirect_uri` | Yes | Must exactly match the redirect URL registered on the LinkedIn app. |
 | `linkedin_allowed_redirect_uris` | No | Space- or comma-separated extra redirect URIs. Leave empty if only one redirect URI is needed. |
 | `linkedin_scopes` | No | OAuth scopes requested on the consent screen. Default covers sign-in and posting. |
@@ -49,9 +51,30 @@ credentials — never commit real secrets to the repository.**
 | `require_operator_confirmation` | No | When `true`, write endpoints require an explicit confirmation token before calling LinkedIn. |
 
 The full JSON Schema is at [`config/config.schema.json`](config/config.schema.json).
-The schema uses `"secret": true` and `"writeOnly": true` annotations so the
-deploy plane knows which fields to source from a secrets manager rather than
-a plain config store.
+Secret fields use `"format": "password"` and `"writeOnly": true` annotations
+so the deploy plane knows which fields to source from a secrets manager rather
+than a plain config store.
+
+### Settings panel API
+
+Operators can also view and update configuration through the component's own
+API, without needing access to the deploy plane:
+
+```bash
+# View current config (secrets are masked)
+curl http://localhost:8000/config
+
+# Update credentials
+curl -X PUT http://localhost:8000/config \
+  -H "Content-Type: application/json" \
+  -d '{"linkedin_client_id": "your-id", "linkedin_client_secret": "your-secret"}'
+
+# View the JSON Schema
+curl http://localhost:8000/config/schema
+```
+
+`PUT /config` supports partial updates — only include the fields you want to
+change. Omitted fields keep their current values.
 
 ## 2. Deploy with docker-compose
 
@@ -66,7 +89,7 @@ This compose file:
 - Pulls `ghcr.io/damien-robotsix/robotsix-linkedin:main`.
 - Declares the `robotsix.deploy.config-target: /app/config/config.json`
   label, which tells the deploy plane where to mount the config file.
-- Sets `LINKEDIN_CONFIG_FILE=/app/config/config.json` so the app reads the
+- Sets `ROBOTSIX_CONFIG_FILE=/app/config/config.json` so the app reads the
   injected file.
 - Includes a health check that polls `/health`.
 
@@ -78,7 +101,7 @@ This compose file:
    filling secret fields from the fleet's secrets manager.
 3. It mounts the resulting file at `/app/config/config.json` inside the
    container.
-4. On startup, the app loads this file as its primary configuration source.
+4. On startup, the app loads this file as its sole configuration source.
 
 ## 3. Verify the deployment
 
@@ -97,7 +120,7 @@ curl http://localhost:8000/auth/login -o /dev/null -w "%{http_code}"
 
 A `503` from `/auth/login` means `linkedin_client_id` or
 `linkedin_client_secret` are empty. Verify the config file was injected
-correctly.
+correctly, or set credentials via `PUT /config`.
 
 ## 4. Configure the LinkedIn redirect URI
 
@@ -106,53 +129,31 @@ set the **Authorized redirect URLs** to match `linkedin_redirect_uri` in your
 config (e.g. `https://your-domain.example.com/auth/callback`). The OAuth flow
 rejects any redirect URI not on the allowlist.
 
-## Migration from env-var-only configuration
-
-Previous versions of `robotsix-linkedin` read settings exclusively from
-`LINKEDIN_*` environment variables. The current version uses
-`config/config.json` as the **source of truth** in deployed environments.
-
-**What changed:**
-
-- `config/config.json` is now the primary configuration source in deployed
-  containers. The deploy plane injects it automatically.
-- `LINKEDIN_*` environment variables are still supported as **overrides** —
-  they take precedence over the config file. This is useful for local
-  development, testing, or emergency overrides.
-- The `.env` file is loaded for local development only (between env vars and
-  the config file in precedence).
-- No functionality was removed. Existing `LINKEDIN_*` env vars continue to
-  work. The change is additive — the config file is a new, lower-priority
-  source that the deploy plane manages.
-
-**Precedence** (highest to lowest):
-
-1. Explicit init arguments (programmatic use)
-2. `LINKEDIN_*` environment variables
-3. `.env` file (local development)
-4. `config/config.json` (deployed environments — injected by the deploy plane)
-
-If you previously set `LINKEDIN_CLIENT_ID` and `LINKEDIN_CLIENT_SECRET` as
-environment variables in your compose file or orchestrator, those still work.
-However, the recommended approach for fleet deployment is to let the deploy
-plane inject `config/config.json` with secrets from the fleet secrets manager.
-
 ## Local development
 
-For local development, continue using environment variables or a `.env` file:
+For local development, edit `config/config.json` directly:
 
 ```bash
-cp .env.example .env
-# Edit .env with your LinkedIn app credentials
+# Edit config/config.json with your LinkedIn app credentials
+# (the template ships with empty placeholders)
 
 pip install ".[dev]"
 python -m linkedin_service
 ```
 
-Or with the root `docker-compose.yml` (builds from source, uses env vars):
+Or with the root `docker-compose.yml` (builds from source, mounts
+`config/` from the host):
 
 ```bash
 docker compose up --build
+```
+
+You can also use the Settings API to set credentials without editing files:
+
+```bash
+curl -X PUT http://localhost:8000/config \
+  -H "Content-Type: application/json" \
+  -d '{"linkedin_client_id": "your-id", "linkedin_client_secret": "your-secret"}'
 ```
 
 ## Compose conventions
@@ -183,7 +184,6 @@ causes registration failures when the deploy plane validates the compose file.
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| `/auth/login` returns 503 | Credentials not loaded | Check `config/config.json` was injected; verify `linkedin_client_id` and `linkedin_client_secret` are non-empty |
+| `/auth/login` returns 503 | Credentials not loaded | Check `config/config.json` was injected; verify `linkedin_client_id` and `linkedin_client_secret` are non-empty. Or set via `PUT /config`. |
 | OAuth callback fails with redirect mismatch | `linkedin_redirect_uri` doesn't match LinkedIn app config | Ensure the value in config exactly matches the LinkedIn Developer Portal setting |
-| Container fails to start | Config file not found at `/app/config/config.json` | Verify the `robotsix.deploy.config-target` label and that the deploy plane mounted the file |
-| `ModuleNotFoundError` on startup | Missing dependency | Run `pip install ".[dev]"` or rebuild the Docker image |
+| Container fails to start | Config file not found at `/app/config/config.json` | Verify the `robotsix.deploy.config-target` label and volume mount are correct |

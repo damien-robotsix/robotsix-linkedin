@@ -159,7 +159,7 @@ def build_authorize_url() -> str:
     tokens.state = state
     params = {
         "response_type": "code",
-        "client_id": settings.linkedin_client_id,
+        "client_id": settings.linkedin_client_id.get_secret_value(),
         "redirect_uri": settings.linkedin_redirect_uri,
         "state": state,
         "scope": " ".join(settings.linkedin_scopes_list),
@@ -185,8 +185,8 @@ async def exchange_code(
                 "grant_type": "authorization_code",
                 "code": code,
                 "redirect_uri": settings.linkedin_redirect_uri,
-                "client_id": settings.linkedin_client_id,
-                "client_secret": settings.linkedin_client_secret,
+                "client_id": settings.linkedin_client_id.get_secret_value(),
+                "client_secret": settings.linkedin_client_secret.get_secret_value(),
             },
             headers={"Content-Type": "application/x-www-form-urlencoded"},
         )
