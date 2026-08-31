@@ -71,11 +71,7 @@ class Settings(BaseModel):
         Always includes ``linkedin_redirect_uri`` plus any extras declared
         in ``linkedin_allowed_redirect_uris`` (order preserved, deduped).
         """
-        extras = [
-            u
-            for u in re.split(r"[,\s]+", self.linkedin_allowed_redirect_uris)
-            if u
-        ]
+        extras = [u for u in re.split(r"[,\s]+", self.linkedin_allowed_redirect_uris) if u]
         uris: list[str] = []
         for uri in [self.linkedin_redirect_uri, *extras]:
             if uri and uri not in uris:

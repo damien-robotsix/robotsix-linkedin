@@ -16,8 +16,7 @@ app = FastAPI(
     title="robotsix-linkedin",
     version="0.1.0",
     description=(
-        "LinkedIn API service for fleet agents — "
-        "OAuth 2.0 auth, reads, operator-gated writes."
+        "LinkedIn API service for fleet agents — OAuth 2.0 auth, reads, operator-gated writes."
     ),
 )
 
@@ -25,6 +24,7 @@ app = FastAPI(
 # ---------------------------------------------------------------------------
 # Health
 # ---------------------------------------------------------------------------
+
 
 @app.get("/health", tags=["infra"])
 async def health() -> dict[str, Any]:
@@ -35,6 +35,7 @@ async def health() -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 # Settings panel
 # ---------------------------------------------------------------------------
+
 
 @app.get("/config", tags=["config"])
 async def get_config() -> dict[str, Any]:
@@ -88,12 +89,13 @@ async def get_config_schema() -> dict[str, Any]:
     """Return the JSON Schema for the configuration model."""
     import json
 
-    return json.loads(config_schema_json())
+    return json.loads(config_schema_json())  # type: ignore[no-any-return]
 
 
 # ---------------------------------------------------------------------------
 # OAuth 2.0
 # ---------------------------------------------------------------------------
+
 
 @app.get("/auth/login", tags=["auth"])
 async def auth_login() -> RedirectResponse:
@@ -114,16 +116,12 @@ async def auth_login() -> RedirectResponse:
 
 
 @app.get("/auth/callback", tags=["auth"])
-async def auth_callback(
-    code: str = Query(...), state: str = Query(...)
-) -> dict[str, Any]:
+async def auth_callback(code: str = Query(...), state: str = Query(...)) -> dict[str, Any]:
     """Handle the OAuth redirect from LinkedIn — exchange code for tokens."""
     try:
         token_data = await auth.exchange_code(code, state)
     except ValueError as exc:
-        raise HTTPException(
-            status_code=400, detail=str(exc)
-        ) from exc
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
         raise HTTPException(
             status_code=502,
@@ -140,6 +138,7 @@ async def auth_callback(
 # ---------------------------------------------------------------------------
 # Read endpoints
 # ---------------------------------------------------------------------------
+
 
 def _require_auth() -> None:
     if not auth.tokens.access_token:
@@ -166,17 +165,15 @@ async def me() -> dict[str, Any]:
 # Write endpoints (operator-gated)
 # ---------------------------------------------------------------------------
 
+
 @app.post("/share", tags=["write"])
 async def create_share(
     text: str = Query(..., description="Share text content"),
-    visibility: str = Query(
-        "PUBLIC", description="PUBLIC or CONNECTIONS"
-    ),
+    visibility: str = Query("PUBLIC", description="PUBLIC or CONNECTIONS"),
     confirmation_token: str | None = Query(
         None,
         description=(
-            "Operator confirmation token. "
-            "Required when require_operator_confirmation is True."
+            "Operator confirmation token. Required when require_operator_confirmation is True."
         ),
     ),
 ) -> dict[str, Any]:
@@ -198,10 +195,7 @@ async def create_share(
             return {
                 "status": "confirmation_required",
                 "confirmation_token": token,
-                "message": (
-                    "Re-submit this request with the "
-                    "confirmation_token to execute."
-                ),
+                "message": ("Re-submit this request with the confirmation_token to execute."),
             }
         payload = auth.consume_confirmation_token(confirmation_token)
         if payload is None:

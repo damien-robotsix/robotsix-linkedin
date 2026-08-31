@@ -33,6 +33,7 @@ TEMPLATE_CONFIG = REPO_ROOT / "config" / "config.json"
 # Shipped template
 # ---------------------------------------------------------------------------
 
+
 def test_template_config_json_is_valid_and_loadable() -> None:
     """The committed ``config/config.json`` template parses and loads."""
     assert TEMPLATE_CONFIG.is_file()
@@ -52,6 +53,7 @@ def test_template_config_json_is_valid_and_loadable() -> None:
 # ---------------------------------------------------------------------------
 # Every key sourced from the config file
 # ---------------------------------------------------------------------------
+
 
 def test_every_setting_key_loads_from_config_file(tmp_path: Path) -> None:
     """Each config key has a scenario proving it is read from the file."""
@@ -94,6 +96,7 @@ def test_every_setting_key_loads_from_config_file(tmp_path: Path) -> None:
 # Edge cases
 # ---------------------------------------------------------------------------
 
+
 def test_missing_config_file_falls_back_to_defaults(tmp_path: Path) -> None:
     """An absent config file is not fatal; field defaults apply."""
     settings = load_config(Settings, tmp_path / "nope.json")
@@ -118,9 +121,7 @@ def test_partial_config_keeps_defaults_for_missing_keys(
 ) -> None:
     """Keys absent from the config file retain their field defaults."""
     cfg = tmp_path / "config.json"
-    cfg.write_text(
-        json.dumps({"linkedin_client_id": "only-id"}), encoding="utf-8"
-    )
+    cfg.write_text(json.dumps({"linkedin_client_id": "only-id"}), encoding="utf-8")
 
     settings = load_config(Settings, cfg)
 
@@ -134,9 +135,7 @@ def test_partial_config_keeps_defaults_for_missing_keys(
 def test_wrong_type_in_config_fails_validation(tmp_path: Path) -> None:
     """A non-coercible value for a typed field raises a validation error."""
     cfg = tmp_path / "config.json"
-    cfg.write_text(
-        json.dumps({"port": "not-a-number"}), encoding="utf-8"
-    )
+    cfg.write_text(json.dumps({"port": "not-a-number"}), encoding="utf-8")
 
     with pytest.raises(InvalidConfigError):
         load_config(Settings, cfg)
@@ -146,9 +145,8 @@ def test_wrong_type_in_config_fails_validation(tmp_path: Path) -> None:
 # Config credentials reach the OAuth client
 # ---------------------------------------------------------------------------
 
-def _apply_settings(
-    monkeypatch: pytest.MonkeyPatch, source: Settings
-) -> None:
+
+def _apply_settings(monkeypatch: pytest.MonkeyPatch, source: Settings) -> None:
     """Copy file-loaded settings onto the module-level OAuth singleton.
 
     ``auth.settings`` and ``app.settings`` are the same object, so patching
@@ -257,6 +255,7 @@ async def test_config_credentials_passed_to_token_exchange(
 # ---------------------------------------------------------------------------
 # End-to-end: no regression to the OAuth login flow
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_auth_login_redirects_with_config_credentials(
