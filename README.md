@@ -41,9 +41,11 @@ The service starts on `http://localhost:8000`. Visit `/health` to confirm.
 
 ## Configuration
 
-All configuration is via environment variables (prefix `LINKEDIN_`). See
-[`.env.example`](.env.example) for a copy-ready template with placeholder
-values only — never commit a populated `.env` (it is git-ignored).
+Configuration is managed via:
+- **Environment variables** (prefix `LINKEDIN_`) — the traditional approach. See [`.env.example`](.env.example) for a copy-ready template.
+- **Config files** (robotsix-standards) — `config/config.json` and `config/config.schema.json` provide a structured config-injection path for fleet deployment. Never commit real credentials; the deploy plane injects secrets at runtime.
+
+Settings reference:
 
 | Variable                                      | Required | Default                               | Description                                 |
 |-----------------------------------------------|----------|---------------------------------------|---------------------------------------------|
