@@ -1,3 +1,4 @@
+# central-deploy-contract-version: 1
 version: "3.9"
 
 # Fleet deployment compose. The deploy plane injects config/config.json into
@@ -6,10 +7,17 @@ version: "3.9"
 services:
   linkedin-api:
     image: ghcr.io/damien-robotsix/robotsix-linkedin:main
+    volumes:
+      - linkedin-config:/app/config
     ports:
       - "8000:8000"
     labels:
       robotsix.deploy.config-target: /app/config/config.json
+      robotsix.deploy.service: "linkedin"
+      robotsix.deploy.description: "LinkedIn OAuth integration and post-update service"
+      robotsix.deploy.health.endpoint: "/health"
+      robotsix.deploy.port: "8000"
+      robotsix.deploy.chat-access: "true"
     environment:
       - LINKEDIN_CONFIG_FILE=/app/config/config.json
     healthcheck:
@@ -18,3 +26,6 @@ services:
       timeout: 5s
       retries: 3
     restart: unless-stopped
+
+volumes:
+  linkedin-config:
