@@ -93,6 +93,43 @@ This compose file:
 
 The deploy plane mounts `config/config.json` (built from `config/config.schema.json`) at `/app/config/config.json` inside the container, and the app loads it as the source of truth.
 
+**Full deployment guide:** see [`DEPLOY.md`](DEPLOY.md) for step-by-step operator instructions, config file format, field reference, and troubleshooting.
+
+### Config File Format
+
+The config file is a JSON object whose keys match the lower-cased `LINKEDIN_*`
+environment variable names (without the prefix). A minimal example:
+
+```json
+{
+  "linkedin_client_id": "<YOUR_CLIENT_ID>",
+  "linkedin_client_secret": "<YOUR_CLIENT_SECRET>",
+  "linkedin_redirect_uri": "https://your-domain.example.com/auth/callback"
+}
+```
+
+All other fields are optional and fall back to their defaults. The full
+template is at [`config/config.json`](config/config.json) and the schema at
+[`config/config.schema.json`](config/config.schema.json). Secret fields
+(`linkedin_client_id`, `linkedin_client_secret`) are annotated with
+`"secret": true` and `"writeOnly": true` so the deploy plane sources them
+from the fleet secrets manager.
+
+### Migration from env-var-only configuration
+
+Previous versions read settings exclusively from `LINKEDIN_*` environment
+variables. The current version adds `config/config.json` as the primary
+configuration source in deployed environments.
+
+**What changed:**
+- `config/config.json` is now the source of truth in deployed containers
+  (injected by the deploy plane).
+- `LINKEDIN_*` environment variables still work as **overrides** — they take
+  precedence over the config file. No existing env-var configuration breaks.
+- `.env` files are loaded for local development only.
+
+**Precedence** (highest to lowest): init args → env vars → `.env` → config file.
+
 ## API Endpoints
 
 ### `GET /health`
