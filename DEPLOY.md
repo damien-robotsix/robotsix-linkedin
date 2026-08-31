@@ -155,6 +155,30 @@ Or with the root `docker-compose.yml` (builds from source, uses env vars):
 docker compose up --build
 ```
 
+## Compose conventions
+
+Every service in `deploy/docker-compose.yml` **must** carry:
+
+1. **Contract-version header** — the file starts with
+   `# central-deploy-contract-version: 1`. The deploy API rejects compose
+   files missing this header.
+2. **`robotsix.deploy.config-target` label** — declares the in-container
+   path where the deploy plane injects the config file. A matching named
+   volume mount must cover that path, and the volume must be declared in
+   the top-level `volumes:` block.
+3. **Standard fleet deploy labels:**
+
+   | Label | Purpose |
+   |---|---|
+   | `robotsix.deploy.label.service` | Service name used by the fleet router |
+   | `robotsix.deploy.label.description` | Human-readable one-liner |
+   | `robotsix.deploy.label.health.endpoint` | HTTP path the deploy plane polls for health |
+   | `robotsix.deploy.label.port` | Container port the service listens on |
+   | `robotsix.deploy.label.chat-access` | Access level for fleet chat agents (`read`, `write`, or `none`) |
+
+These requirements match the robotsix fleet contract. Omitting any of them
+causes registration failures when the deploy plane validates the compose file.
+
 ## Troubleshooting
 
 | Symptom | Cause | Fix |
