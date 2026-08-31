@@ -1,0 +1,20 @@
+version: "3.9"
+
+# Fleet deployment compose. The deploy plane injects config/config.json into
+# the container at the path named by the robotsix.deploy.config-target label;
+# the app reads it as the source of truth (see src/linkedin_service/config.py).
+services:
+  linkedin-api:
+    image: ghcr.io/damien-robotsix/robotsix-linkedin:main
+    ports:
+      - "8000:8000"
+    labels:
+      robotsix.deploy.config-target: /app/config/config.json
+    environment:
+      - LINKEDIN_CONFIG_FILE=/app/config/config.json
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped

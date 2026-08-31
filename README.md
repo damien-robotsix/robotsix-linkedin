@@ -41,9 +41,21 @@ The service starts on `http://localhost:8000`. Visit `/health` to confirm.
 
 ## Configuration
 
-Configuration is managed via:
-- **Environment variables** (prefix `LINKEDIN_`) — the traditional approach. See [`.env.example`](.env.example) for a copy-ready template.
-- **Config files** (robotsix-standards) — `config/config.json` and `config/config.schema.json` provide a structured config-injection path for fleet deployment. Never commit real credentials; the deploy plane injects secrets at runtime.
+In **local development**, configuration is sourced from:
+- **Environment variables** (prefix `LINKEDIN_`) — see [`.env.example`](.env.example) for a copy-ready template.
+- **`.env` file** — loaded automatically for convenience.
+
+In **fleet deployment**, configuration is sourced from:
+- **`config/config.json`** — the source of truth, injected at runtime by the deploy plane via the `robotsix.deploy.config-target` label in `deploy/docker-compose.yml`.
+- **Environment variables** — override individual settings for testing or emergency changes (e.g. setting `LINKEDIN_PORT=9000` will override the port in the config file).
+
+**Precedence** (highest to lowest):
+1. Explicit init arguments
+2. Environment variables (`LINKEDIN_*`)
+3. `.env` file (local dev only)
+4. `config/config.json` (deployed environments)
+
+Never commit real credentials; the deploy plane injects `config/config.json` with secrets at runtime.
 
 Settings reference:
 
@@ -58,12 +70,28 @@ Settings reference:
 | `LINKEDIN_HOST`                               | No       | `0.0.0.0`                             | Bind host                                   |
 | `LINKEDIN_PORT`                               | No       | `8000`                                | Bind port                                   |
 | `LINKEDIN_REQUIRE_OPERATOR_CONFIRMATION`      | No       | `True`                                | Require confirmation for writes             |
+| `LINKEDIN_CONFIG_FILE`                        | No       | `config/config.json`                  | Path to the JSON config file; used by the deploy plane to inject `config/config.json` (local dev / tests can override this) |
 
 \* When not set, the service boots but `/auth/login` returns 503. `/health` still returns 200.
 
 The OAuth flow validates the redirect URI against an allowlist
 (`LINKEDIN_REDIRECT_URI` plus any entries in `LINKEDIN_ALLOWED_REDIRECT_URIS`)
 before contacting LinkedIn, rejecting any value not on the list.
+
+### Fleet Deployment
+
+For fleet deployment, use `deploy/docker-compose.yml`:
+
+```bash
+docker compose -f deploy/docker-compose.yml up
+```
+
+This compose file:
+- Declares the `robotsix.deploy.config-target: /app/config/config.json` label, which tells the deploy plane where to inject the config file.
+- Sets `LINKEDIN_CONFIG_FILE=/app/config/config.json` to direct the app to read the injected config.
+- Includes the fleet-standard health check.
+
+The deploy plane mounts `config/config.json` (built from `config/config.schema.json`) at `/app/config/config.json` inside the container, and the app loads it as the source of truth.
 
 ## API Endpoints
 
