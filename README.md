@@ -8,11 +8,14 @@ LinkedIn API service for fleet agents — OAuth 2.0 authentication, profile read
 # Install
 pip install ".[dev]"
 
-# Configure — copy the template and fill in real values (never commit .env)
-cp .env.example .env
+# Configure — edit config/config.json (the single source of truth)
+# or use the Settings API:
+#   GET  /config        — view current config (secrets masked)
+#   PUT  /config        — update config fields
+#   GET  /config/schema — JSON Schema for the config model
 
 # Run (stubs auth when credentials are missing)
-LINKEDIN_CLIENT_ID=... LINKEDIN_CLIENT_SECRET=... python -m linkedin_service
+python -m linkedin_service
 
 # Or with Docker
 docker compose up --build
@@ -41,64 +44,62 @@ The service starts on `http://localhost:8000`. Visit `/health` to confirm.
 
 ## Configuration
 
-In **local development**, configuration is sourced from:
-- **Environment variables** (prefix `LINKEDIN_`) — see [`.env.example`](.env.example) for a copy-ready template.
-- **`.env` file** — loaded automatically for convenience.
+All configuration is loaded from a single JSON file (`config/config.json`).
+There is **no environment-variable overlay** — the file is the sole source of
+truth. The config file path can be overridden with `ROBOTSIX_CONFIG_FILE`
+(default: `config/config.json`).
 
-In **fleet deployment**, configuration is sourced from:
-- **`config/config.json`** — the source of truth, injected at runtime by the deploy plane via the `robotsix.deploy.config-target` label in `deploy/docker-compose.yml`.
-- **Environment variables** — override individual settings for testing or emergency changes (e.g. setting `LINKEDIN_PORT=9000` will override the port in the config file).
+Operators can view and update configuration through the Settings panel API:
 
-**Precedence** (highest to lowest):
-1. Explicit init arguments
-2. Environment variables (`LINKEDIN_*`)
-3. `.env` file (local dev only)
-4. `config/config.json` (deployed environments)
-
-Never commit real credentials; the deploy plane injects `config/config.json` with secrets at runtime.
-
-Settings reference:
-
-| Variable                                      | Required | Default                               | Description                                 |
-|-----------------------------------------------|----------|---------------------------------------|---------------------------------------------|
-| `LINKEDIN_CLIENT_ID`                          | Yes*     | `""`                                  | LinkedIn app client ID                      |
-| `LINKEDIN_CLIENT_SECRET`                      | Yes*     | `""`                                  | LinkedIn app client secret                  |
-| `LINKEDIN_REDIRECT_URI`                       | No       | `http://localhost:8000/auth/callback` | OAuth redirect URI                          |
-| `LINKEDIN_ALLOWED_REDIRECT_URIS`              | No       | `""`                                  | Extra allowed redirect URIs (space/comma)   |
-| `LINKEDIN_SCOPES`                             | No       | `openid profile email w_member_social`| Space-separated scope list                  |
-| `LINKEDIN_TOKEN_FILE`                         | No       | `~/.config/linkedin-service/tokens.json` | File (outside the repo) where tokens persist; `0600` in a `0700` dir. Empty disables persistence |
-| `LINKEDIN_HOST`                               | No       | `0.0.0.0`                             | Bind host                                   |
-| `LINKEDIN_PORT`                               | No       | `8000`                                | Bind port                                   |
-| `LINKEDIN_REQUIRE_OPERATOR_CONFIRMATION`      | No       | `True`                                | Require confirmation for writes             |
-| `LINKEDIN_CONFIG_FILE`                        | No       | `config/config.json`                  | Path to the JSON config file; used by the deploy plane to inject `config/config.json` (local dev / tests can override this) |
-
-\* When not set, the service boots but `/auth/login` returns 503. `/health` still returns 200.
-
-The OAuth flow validates the redirect URI against an allowlist
-(`LINKEDIN_REDIRECT_URI` plus any entries in `LINKEDIN_ALLOWED_REDIRECT_URIS`)
-before contacting LinkedIn, rejecting any value not on the list.
-
-### Fleet Deployment
-
-For fleet deployment, use `deploy/docker-compose.yml`:
-
-```bash
-docker compose -f deploy/docker-compose.yml up
+```
+GET  /config        — view current config (secrets masked)
+PUT  /config        — update config fields (partial updates supported)
+GET  /config/schema — JSON Schema for the config model
 ```
 
-This compose file:
-- Declares the `robotsix.deploy.config-target: /app/config/config.json` label, which tells the deploy plane where to inject the config file.
-- Sets `LINKEDIN_CONFIG_FILE=/app/config/config.json` to direct the app to read the injected config.
-- Includes the fleet-standard health check.
+### Config fields
 
-The deploy plane mounts `config/config.json` (built from `config/config.schema.json`) at `/app/config/config.json` inside the container, and the app loads it as the source of truth.
+| Field | Required | Default | Description |
+|---|---|---|---|
+| `linkedin_client_id` | Yes* | `""` | LinkedIn app client ID (secret) |
+| `linkedin_client_secret` | Yes* | `""` | LinkedIn app client secret (secret) |
+| `linkedin_redirect_uri` | Yes | `http://localhost:8000/auth/callback` | OAuth redirect URI |
+| `linkedin_allowed_redirect_uris` | No | `""` | Space- or comma-separated extra redirect URIs |
+| `linkedin_scopes` | No | `openid profile email w_member_social` | Space-separated scope list |
+| `linkedin_token_file` | No | `~/.config/linkedin-service/tokens.json` | Token persistence path (outside the repo) |
+| `host` | No | `0.0.0.0` | Bind host |
+| `port` | No | `8000` | Bind port |
+| `require_operator_confirmation` | No | `true` | Require confirmation for writes |
 
-**Full deployment guide:** see [`DEPLOY.md`](DEPLOY.md) for step-by-step operator instructions, config file format, field reference, and troubleshooting.
+\* When credentials are not configured, the service boots but `/auth/login`
+returns 503. `/health` still returns 200.
+
+Secret fields (`linkedin_client_id`, `linkedin_client_secret`) are masked in
+`GET /config` responses and marked `writeOnly` in the JSON Schema.
+
+### Settings panel API
+
+Operators can view and update configuration through the component's own API:
+
+```bash
+# View current config (secrets are masked)
+curl http://localhost:8000/config
+
+# Update credentials
+curl -X PUT http://localhost:8000/config \
+  -H "Content-Type: application/json" \
+  -d '{"linkedin_client_id": "your-id", "linkedin_client_secret": "your-secret"}'
+
+# View the JSON Schema
+curl http://localhost:8000/config/schema
+```
+
+`PUT /config` supports partial updates — only include the fields you want to
+change. Omitted fields keep their current values.
 
 ### Config File Format
 
-The config file is a JSON object whose keys match the lower-cased `LINKEDIN_*`
-environment variable names (without the prefix). A minimal example:
+A minimal `config/config.json`:
 
 ```json
 {
@@ -111,26 +112,40 @@ environment variable names (without the prefix). A minimal example:
 All other fields are optional and fall back to their defaults. The full
 template is at [`config/config.json`](config/config.json) and the schema at
 [`config/config.schema.json`](config/config.schema.json). Secret fields
-(`linkedin_client_id`, `linkedin_client_secret`) are annotated with
-`"secret": true` and `"writeOnly": true` so the deploy plane sources them
-from the fleet secrets manager.
+(`linkedin_client_id`, `linkedin_client_secret`) use `"format": "password"`
+and `"writeOnly": true` so the deploy plane knows which fields to source
+from a secrets manager rather than a plain config store.
 
-### Migration from env-var-only configuration
+### Fleet Deployment
 
-Previous versions read settings exclusively from `LINKEDIN_*` environment
-variables. The current version adds `config/config.json` as the primary
-configuration source in deployed environments.
+For fleet deployment, use `deploy/docker-compose.yml`:
 
-**What changed:**
-- `config/config.json` is now the source of truth in deployed containers
-  (injected by the deploy plane).
-- `LINKEDIN_*` environment variables still work as **overrides** — they take
-  precedence over the config file. No existing env-var configuration breaks.
-- `.env` files are loaded for local development only.
+```bash
+docker compose -f deploy/docker-compose.yml up
+```
 
-**Precedence** (highest to lowest): init args → env vars → `.env` → config file.
+This compose file:
+- Declares the `robotsix.deploy.config-target: /app/config/config.json` label, which tells the deploy plane where to mount the config file.
+- Sets `ROBOTSIX_CONFIG_FILE=/app/config/config.json` to direct the app to read the injected config.
+- Includes the fleet-standard health check.
+
+The deploy plane mounts `config/config.json` (built from
+`config/config.schema.json`) at `/app/config/config.json` inside the
+container, and the app loads it as the sole configuration source.
+
+**Full deployment guide:** see [`DEPLOY.md`](DEPLOY.md) for step-by-step
+operator instructions, config file format, field reference, and
+troubleshooting.
 
 ## API Endpoints
+
+### Config (Settings panel)
+
+| Method | Path            | Description                            | Auth required |
+|--------|-----------------|----------------------------------------|---------------|
+| GET    | `/config`       | Current configuration (secrets masked) | No            |
+| PUT    | `/config`       | Update configuration and persist       | No            |
+| GET    | `/config/schema`| JSON Schema for the config model       | No            |
 
 ### `GET /health`
 
@@ -164,7 +179,8 @@ On success the response includes the created post URN, e.g.
 - All **read** endpoints are safe to call without operator approval.
 - All **write** endpoints are **state-mutating** and gated behind operator confirmation.
 - Tokens and credentials are never committed to the repository.
-- Credentials are loaded from environment variables / config volume.
+- Credentials are stored in `config/config.json` (or set via `PUT /config`) and masked in API responses.
+- There is no environment-variable overlay — the config file is the sole source of truth.
 
 ## Development
 
@@ -179,13 +195,21 @@ mypy src/
 pytest -v
 ```
 
+For local development, edit `config/config.json` directly (the template
+ships with empty placeholders), or use the Settings API:
+
+```bash
+curl -X PUT http://localhost:8000/config \
+  -H "Content-Type: application/json" \
+  -d '{"linkedin_client_id": "your-id", "linkedin_client_secret": "your-secret"}'
+```
+
 ## Docker
 
 ```bash
 docker build -t robotsix-linkedin .
 docker run -p 8000:8000 \
-  -e LINKEDIN_CLIENT_ID=... \
-  -e LINKEDIN_CLIENT_SECRET=... \
+  -v "$(pwd)/config/config.json:/app/config/config.json" \
   robotsix-linkedin
 ```
 

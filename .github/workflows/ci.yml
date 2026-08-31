@@ -12,13 +12,16 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ["3.11", "3.12"]
+        python-version: ["3.14"]
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
 
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5.6.0
         with:
           python-version: ${{ matrix.python-version }}
+
+      - name: Install robotsix-config from GitHub
+        run: pip install "robotsix-config @ git+https://github.com/damien-robotsix/robotsix-config@b68476fa9aab58f70697d870da956220ecf9cf48"
 
       - name: Install dependencies
         run: pip install ".[dev]"

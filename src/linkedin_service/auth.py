@@ -102,7 +102,7 @@ class TokenStore:
             return
         try:
             data = json.loads(file_path.read_text(encoding="utf-8"))
-        except (ValueError, OSError):
+        except ValueError, OSError:
             return
         self.access_token = data.get("access_token", "")
         self.refresh_token = data.get("refresh_token", "")
@@ -134,6 +134,7 @@ def consume_confirmation_token(token: str) -> dict[str, Any] | None:
 # Auth flow helpers
 # ---------------------------------------------------------------------------
 
+
 def validate_redirect_uri(uri: str) -> None:
     """Ensure ``uri`` is on the configured allowlist.
 
@@ -151,15 +152,13 @@ def build_authorize_url() -> str:
     the configured redirect URI is not on the allowlist.
     """
     if not settings.auth_configured:
-        raise RuntimeError(
-            "LinkedIn client credentials are not configured."
-        )
+        raise RuntimeError("LinkedIn client credentials are not configured.")
     validate_redirect_uri(settings.linkedin_redirect_uri)
     state = secrets.token_urlsafe(16)
     tokens.state = state
     params = {
         "response_type": "code",
-        "client_id": settings.linkedin_client_id,
+        "client_id": settings.linkedin_client_id.get_secret_value(),
         "redirect_uri": settings.linkedin_redirect_uri,
         "state": state,
         "scope": " ".join(settings.linkedin_scopes_list),
@@ -167,9 +166,7 @@ def build_authorize_url() -> str:
     return f"{AUTHORIZE_URL}?{urllib.parse.urlencode(params)}"
 
 
-async def exchange_code(
-    code: str, state: str
-) -> dict[str, Any]:
+async def exchange_code(code: str, state: str) -> dict[str, Any]:
     """Exchange an authorization code for access + refresh tokens.
 
     Returns the token response dict.  Raises on mismatched state or
@@ -185,8 +182,8 @@ async def exchange_code(
                 "grant_type": "authorization_code",
                 "code": code,
                 "redirect_uri": settings.linkedin_redirect_uri,
-                "client_id": settings.linkedin_client_id,
-                "client_secret": settings.linkedin_client_secret,
+                "client_id": settings.linkedin_client_id.get_secret_value(),
+                "client_secret": settings.linkedin_client_secret.get_secret_value(),
             },
             headers={"Content-Type": "application/x-www-form-urlencoded"},
         )
@@ -227,6 +224,7 @@ async def refresh_access_token() -> dict[str, Any]:
 # LinkedIn API wrappers
 # ---------------------------------------------------------------------------
 
+
 def _auth_headers() -> dict[str, str]:
     return {
         "Authorization": f"Bearer {tokens.access_token}",
@@ -237,17 +235,13 @@ def _auth_headers() -> dict[str, str]:
 async def get_profile() -> dict[str, Any]:
     """Fetch the authenticated member's profile (OpenID Connect userinfo)."""
     async with httpx.AsyncClient() as client:
-        resp = await client.get(
-            f"{API_BASE}/userinfo", headers=_auth_headers()
-        )
+        resp = await client.get(f"{API_BASE}/userinfo", headers=_auth_headers())
         _raise_for_status(resp)
     result: dict[str, Any] = resp.json()
     return result
 
 
-async def share_content(
-    text: str, visibility: str = "PUBLIC"
-) -> dict[str, Any]:
+async def share_content(text: str, visibility: str = "PUBLIC") -> dict[str, Any]:
     """Post a share / UGC on behalf of the authenticated member.
 
     This is a **state-mutating** action — callers MUST gate it behind
@@ -265,9 +259,7 @@ async def share_content(
                 "shareMediaCategory": "NONE",
             }
         },
-        "visibility": {
-            "com.linkedin.ugc.MemberNetworkVisibility": visibility
-        },
+        "visibility": {"com.linkedin.ugc.MemberNetworkVisibility": visibility},
     }
     async with httpx.AsyncClient() as client:
         resp = await client.post(

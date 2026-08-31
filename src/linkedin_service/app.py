@@ -6,16 +6,17 @@ from typing import Any
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import RedirectResponse
+from pydantic import BaseModel
+from robotsix_config import dump_config
 
 from . import auth
-from .config import settings
+from .config import config_schema_json, settings
 
 app = FastAPI(
     title="robotsix-linkedin",
     version="0.1.0",
     description=(
-        "LinkedIn API service for fleet agents — "
-        "OAuth 2.0 auth, reads, operator-gated writes."
+        "LinkedIn API service for fleet agents — OAuth 2.0 auth, reads, operator-gated writes."
     ),
 )
 
@@ -24,6 +25,7 @@ app = FastAPI(
 # Health
 # ---------------------------------------------------------------------------
 
+
 @app.get("/health", tags=["infra"])
 async def health() -> dict[str, Any]:
     """Liveness probe."""
@@ -31,8 +33,69 @@ async def health() -> dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
+# Settings panel
+# ---------------------------------------------------------------------------
+
+
+@app.get("/config", tags=["config"])
+async def get_config() -> dict[str, Any]:
+    """Return the current configuration (secrets are masked)."""
+    return settings.model_dump()
+
+
+class _ConfigUpdate(BaseModel):
+    """Partial config update — only supplied fields are changed."""
+
+    linkedin_client_id: str | None = None
+    linkedin_client_secret: str | None = None
+    linkedin_redirect_uri: str | None = None
+    linkedin_allowed_redirect_uris: str | None = None
+    linkedin_scopes: str | None = None
+    linkedin_token_file: str | None = None
+    host: str | None = None
+    port: int | None = None
+    require_operator_confirmation: bool | None = None
+
+
+@app.put("/config", tags=["config"])
+async def put_config(body: _ConfigUpdate) -> dict[str, Any]:
+    """Update configuration and persist to the config file.
+
+    Only fields present in the request body are changed; omitted fields
+    keep their current values. Secret fields accept plain strings.
+    """
+    updates = body.model_dump(exclude_none=True)
+
+    # Convert plain-string secret fields to SecretStr.
+    for key in ("linkedin_client_id", "linkedin_client_secret"):
+        if key in updates:
+            from pydantic import SecretStr
+
+            updates[key] = SecretStr(updates[key])
+
+    # Apply updates to the live settings object in-place so every module
+    # that imported ``settings`` sees the change immediately.
+    for key, value in updates.items():
+        setattr(settings, key, value)
+
+    # Persist to the config file.
+    dump_config(settings)
+
+    return {"status": "ok"}
+
+
+@app.get("/config/schema", tags=["config"])
+async def get_config_schema() -> dict[str, Any]:
+    """Return the JSON Schema for the configuration model."""
+    import json
+
+    return json.loads(config_schema_json())  # type: ignore[no-any-return]
+
+
+# ---------------------------------------------------------------------------
 # OAuth 2.0
 # ---------------------------------------------------------------------------
+
 
 @app.get("/auth/login", tags=["auth"])
 async def auth_login() -> RedirectResponse:
@@ -45,7 +108,7 @@ async def auth_login() -> RedirectResponse:
             status_code=503,
             detail=(
                 "LinkedIn client credentials not configured. "
-                "Set LINKEDIN_CLIENT_ID and LINKEDIN_CLIENT_SECRET."
+                "Set them via PUT /config or in config/config.json."
             ),
         )
     url = auth.build_authorize_url()
@@ -53,16 +116,12 @@ async def auth_login() -> RedirectResponse:
 
 
 @app.get("/auth/callback", tags=["auth"])
-async def auth_callback(
-    code: str = Query(...), state: str = Query(...)
-) -> dict[str, Any]:
+async def auth_callback(code: str = Query(...), state: str = Query(...)) -> dict[str, Any]:
     """Handle the OAuth redirect from LinkedIn — exchange code for tokens."""
     try:
         token_data = await auth.exchange_code(code, state)
     except ValueError as exc:
-        raise HTTPException(
-            status_code=400, detail=str(exc)
-        ) from exc
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
         raise HTTPException(
             status_code=502,
@@ -79,6 +138,7 @@ async def auth_callback(
 # ---------------------------------------------------------------------------
 # Read endpoints
 # ---------------------------------------------------------------------------
+
 
 def _require_auth() -> None:
     if not auth.tokens.access_token:
@@ -105,17 +165,15 @@ async def me() -> dict[str, Any]:
 # Write endpoints (operator-gated)
 # ---------------------------------------------------------------------------
 
+
 @app.post("/share", tags=["write"])
 async def create_share(
     text: str = Query(..., description="Share text content"),
-    visibility: str = Query(
-        "PUBLIC", description="PUBLIC or CONNECTIONS"
-    ),
+    visibility: str = Query("PUBLIC", description="PUBLIC or CONNECTIONS"),
     confirmation_token: str | None = Query(
         None,
         description=(
-            "Operator confirmation token. "
-            "Required when require_operator_confirmation is True."
+            "Operator confirmation token. Required when require_operator_confirmation is True."
         ),
     ),
 ) -> dict[str, Any]:
@@ -137,10 +195,7 @@ async def create_share(
             return {
                 "status": "confirmation_required",
                 "confirmation_token": token,
-                "message": (
-                    "Re-submit this request with the "
-                    "confirmation_token to execute."
-                ),
+                "message": ("Re-submit this request with the confirmation_token to execute."),
             }
         payload = auth.consume_confirmation_token(confirmation_token)
         if payload is None:

@@ -13,6 +13,14 @@ profile reads, and operator-gated write actions (posting / sharing).
 |--------|-----------|----------------------|---------------|
 | GET    | `/health` | Liveness probe       | No            |
 
+### Config (Settings panel)
+
+| Method | Path             | Description                                      | Auth required |
+|--------|------------------|--------------------------------------------------|---------------|
+| GET    | `/config`        | Current configuration (secrets masked)           | No            |
+| PUT    | `/config`        | Update configuration and persist to config file  | No            |
+| GET    | `/config/schema` | JSON Schema for the configuration model          | No            |
+
 ### Auth (OAuth 2.0 — 3-legged)
 
 | Method | Path             | Description                                      | Auth required |
@@ -52,16 +60,33 @@ profile reads, and operator-gated write actions (posting / sharing).
 
 ## Configuration
 
-All config is via environment variables (prefix `LINKEDIN_`):
+All configuration is loaded from a single JSON file (`config/config.json`).
+There is no environment-variable overlay — the file is the sole source of
+truth. Operators can view and update configuration through the Settings
+panel endpoints:
 
-| Variable                    | Required | Default                              | Description                     |
-|-----------------------------|----------|--------------------------------------|---------------------------------|
-| `LINKEDIN_CLIENT_ID`        | Yes*     | `""`                                 | LinkedIn app client ID          |
-| `LINKEDIN_CLIENT_SECRET`    | Yes*     | `""`                                 | LinkedIn app client secret      |
-| `LINKEDIN_REDIRECT_URI`     | No       | `http://localhost:8000/auth/callback`| OAuth redirect URI              |
-| `LINKEDIN_SCOPES`           | No       | `openid profile email w_member_social`| Space-separated scope list     |
-| `LINKEDIN_HOST`             | No       | `0.0.0.0`                            | Bind host                       |
-| `LINKEDIN_PORT`             | No       | `8000`                               | Bind port                       |
-| `LINKEDIN_REQUIRE_OPERATOR_CONFIRMATION` | No | `True`                        | Require confirmation for writes |
+```
+GET  /config          — view current config (secrets masked)
+PUT  /config          — update config fields (partial updates supported)
+GET  /config/schema   — JSON Schema for the config model
+```
 
-\* When not set, the service boots but `/auth/login` returns 503.
+### Config fields
+
+| Field | Required | Default | Description |
+|---|---|---|---|
+| `linkedin_client_id` | Yes | `""` | LinkedIn app OAuth 2.0 client ID (secret) |
+| `linkedin_client_secret` | Yes | `""` | LinkedIn app OAuth 2.0 client secret (secret) |
+| `linkedin_redirect_uri` | Yes | `http://localhost:8000/auth/callback` | OAuth redirect URI |
+| `linkedin_allowed_redirect_uris` | No | `""` | Space- or comma-separated extra redirect URIs |
+| `linkedin_scopes` | No | `openid profile email w_member_social` | OAuth scopes |
+| `linkedin_token_file` | No | `~/.config/linkedin-service/tokens.json` | Token persistence path |
+| `host` | No | `0.0.0.0` | Bind host |
+| `port` | No | `8000` | Bind port |
+| `require_operator_confirmation` | No | `true` | Require confirmation for writes |
+
+Secret fields (`linkedin_client_id`, `linkedin_client_secret`) are masked in
+`GET /config` responses and marked `writeOnly` in the JSON Schema.
+
+When credentials are not yet configured, the service boots but `/auth/login`
+returns 503.

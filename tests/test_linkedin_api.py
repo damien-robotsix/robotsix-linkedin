@@ -11,6 +11,7 @@ from typing import Any
 
 import httpx
 import pytest
+from pydantic import SecretStr
 
 from linkedin_service import auth
 from linkedin_service.config import settings
@@ -71,13 +72,14 @@ def _patch_client(monkeypatch: pytest.MonkeyPatch, response: _FakeResponse) -> _
 
 @pytest.fixture
 def _credentials(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(settings, "linkedin_client_id", "cid")
-    monkeypatch.setattr(settings, "linkedin_client_secret", "csecret")
+    monkeypatch.setattr(settings, "linkedin_client_id", SecretStr("cid"))
+    monkeypatch.setattr(settings, "linkedin_client_secret", SecretStr("csecret"))
 
 
 # ---------------------------------------------------------------------------
 # Token exchange
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_exchange_code_stores_tokens(
@@ -132,6 +134,7 @@ async def test_exchange_code_surfaces_api_error(
 # Authorize URL / redirect allowlist
 # ---------------------------------------------------------------------------
 
+
 def test_build_authorize_url_contains_scopes_and_state(
     monkeypatch: pytest.MonkeyPatch, _credentials: None
 ) -> None:
@@ -154,6 +157,7 @@ def test_validate_redirect_uri_accepts_configured() -> None:
 # ---------------------------------------------------------------------------
 # Post create
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_share_content_returns_urn(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -199,6 +203,7 @@ async def test_share_content_surfaces_api_error(monkeypatch: pytest.MonkeyPatch)
 # Token persistence
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_exchange_code_persists_tokens_to_file(
     monkeypatch: pytest.MonkeyPatch, _credentials: None
@@ -232,9 +237,7 @@ async def test_exchange_code_persists_tokens_to_file(
 
 
 def test_token_store_save_load_roundtrip() -> None:
-    store = auth.TokenStore(
-        access_token="a", refresh_token="r", expires_at=123.0, state="nonce"
-    )
+    store = auth.TokenStore(access_token="a", refresh_token="r", expires_at=123.0, state="nonce")
     store.save()
 
     loaded = auth.TokenStore()

@@ -1,76 +1,56 @@
 {
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://robotsix.net/schemas/robotsix-linkedin/config.schema.json",
-  "title": "robotsix-linkedin configuration",
-  "description": "Settings for the robotsix-linkedin service. Each property maps to a LINKEDIN_* environment variable (env_prefix \"LINKEDIN_\") consumed by the pydantic Settings class in src/linkedin_service/config.py. Secret fields are flagged with \"secret\": true and \"writeOnly\": true so the deploy plane injects them from a secure store rather than committing them.",
-  "type": "object",
-  "additionalProperties": false,
+  "description": "Configuration sourced from one JSON file \u2014 no env overlay.",
   "properties": {
     "linkedin_client_id": {
-      "type": "string",
-      "title": "LinkedIn OAuth client id",
-      "description": "OAuth 2.0 client id issued for the LinkedIn app (LINKEDIN_CLIENT_ID).",
       "default": "",
-      "secret": true,
+      "format": "password",
+      "title": "Linkedin Client Id",
+      "type": "string",
       "writeOnly": true
     },
     "linkedin_client_secret": {
-      "type": "string",
-      "title": "LinkedIn OAuth client secret",
-      "description": "OAuth 2.0 client secret issued for the LinkedIn app (LINKEDIN_CLIENT_SECRET). Never commit a real value.",
       "default": "",
-      "secret": true,
+      "format": "password",
+      "title": "Linkedin Client Secret",
+      "type": "string",
       "writeOnly": true
     },
     "linkedin_redirect_uri": {
-      "type": "string",
-      "format": "uri",
-      "title": "OAuth redirect URI",
-      "description": "Redirect URI registered on the LinkedIn app; must match exactly (LINKEDIN_REDIRECT_URI).",
-      "default": "http://localhost:8000/auth/callback"
+      "default": "http://localhost:8000/auth/callback",
+      "title": "Linkedin Redirect Uri",
+      "type": "string"
     },
     "linkedin_allowed_redirect_uris": {
-      "type": "string",
-      "title": "Additional allowed redirect URIs",
-      "description": "Space- or comma-separated allowlist of extra redirect URIs permitted by the OAuth flow, in addition to linkedin_redirect_uri (LINKEDIN_ALLOWED_REDIRECT_URIS). Empty allows only linkedin_redirect_uri.",
-      "default": ""
+      "default": "",
+      "title": "Linkedin Allowed Redirect Uris",
+      "type": "string"
     },
     "linkedin_scopes": {
-      "type": "string",
-      "title": "OAuth scopes",
-      "description": "Space-separated OAuth scopes requested on the consent screen (LINKEDIN_SCOPES).",
-      "default": "openid profile email w_member_social"
+      "default": "openid profile email w_member_social",
+      "title": "Linkedin Scopes",
+      "type": "string"
     },
     "linkedin_token_file": {
-      "type": "string",
-      "title": "OAuth token file path",
-      "description": "Path where OAuth access/refresh tokens are persisted, outside the repo (LINKEDIN_TOKEN_FILE). Set to an empty string to disable on-disk persistence.",
-      "default": "~/.config/linkedin-service/tokens.json"
+      "default": "~/.config/linkedin-service/tokens.json",
+      "title": "Linkedin Token File",
+      "type": "string"
     },
     "host": {
-      "type": "string",
-      "title": "Bind host",
-      "description": "Address the service binds to (LINKEDIN_HOST).",
-      "default": "0.0.0.0"
+      "default": "0.0.0.0",
+      "title": "Host",
+      "type": "string"
     },
     "port": {
-      "type": "integer",
-      "title": "Bind port",
-      "description": "TCP port the service listens on (LINKEDIN_PORT).",
-      "minimum": 1,
-      "maximum": 65535,
-      "default": 8000
+      "default": 8000,
+      "title": "Port",
+      "type": "integer"
     },
     "require_operator_confirmation": {
-      "type": "boolean",
-      "title": "Require operator confirmation",
-      "description": "When true, write endpoints require an explicit operator confirmation token before calling LinkedIn (LINKEDIN_REQUIRE_OPERATOR_CONFIRMATION).",
-      "default": true
+      "default": true,
+      "title": "Require Operator Confirmation",
+      "type": "boolean"
     }
   },
-  "required": [
-    "linkedin_client_id",
-    "linkedin_client_secret",
-    "linkedin_redirect_uri"
-  ]
+  "title": "Settings",
+  "type": "object"
 }

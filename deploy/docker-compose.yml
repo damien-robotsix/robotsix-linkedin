@@ -19,7 +19,7 @@ services:
       robotsix.deploy.label.port: "8000"
       robotsix.deploy.label.chat-access: read
     environment:
-      - LINKEDIN_CONFIG_FILE=/app/config/config.json
+      - ROBOTSIX_CONFIG_FILE=/app/config/config.json
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 10s
