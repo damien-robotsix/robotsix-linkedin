@@ -20,6 +20,9 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
+      - name: Install robotsix-config from GitHub
+        run: pip install "robotsix-config @ git+https://github.com/damien-robotsix/robotsix-config@b68476fa9aab58f70697d870da956220ecf9cf48"
+
       - name: Install dependencies
         run: pip install ".[dev]"
 
