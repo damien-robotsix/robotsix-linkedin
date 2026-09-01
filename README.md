@@ -169,6 +169,22 @@ Handles the OAuth redirect from LinkedIn. Exchanges the authorization code for t
 
 Returns the authenticated member's profile (requires prior OAuth login).
 
+### `GET /organizations`
+
+Lists Company Pages the authenticated member administers (id, name, vanity
+name, logo) via LinkedIn's `organizationAcls` API. Read-only — safe to call
+without operator confirmation. Requires an Organization scope
+(`r_organization_social` or `rw_organization_admin`) on the token; without
+it returns a 403 explaining that Community Management API access + org
+scopes are needed.
+
+### `GET /organizations/{id}`
+
+Fetches a single Company Page's admin-visible details by LinkedIn
+organization id via LinkedIn's `organizations` API. Read-only — safe to call
+without operator confirmation. Same org-scope requirement as
+`GET /organizations`.
+
 ### `POST /share?text=...&visibility=PUBLIC`
 
 Creates a text post on the authenticated member's feed. **State-mutating** —

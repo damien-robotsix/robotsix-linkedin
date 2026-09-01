@@ -169,6 +169,32 @@ def _require_auth() -> None:
         )
 
 
+def _handle_linkedin_error(exc: Exception) -> None:
+    """Translate LinkedIn-side errors into helpful HTTP responses.
+
+    Missing org scope is surfaced as a clear 403 rather than an opaque 502,
+    and upstream 403s (e.g. LinkedIn rejecting an org call despite a
+    configured scope) explain what is needed instead of failing silently.
+    """
+    if isinstance(exc, auth.LinkedInScopeMissingError):
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    if isinstance(exc, auth.LinkedInAPIError) and exc.status_code == 403:
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                "LinkedIn rejected the organization request (403). Community "
+                "Management API access plus an Organization scope is required "
+                "on the token; ensure linkedin_scopes includes "
+                "r_organization_social or rw_organization_admin, then "
+                "re-authenticate via /auth/login."
+            ),
+        ) from exc
+    raise HTTPException(
+        status_code=502,
+        detail=f"LinkedIn API error: {exc}",
+    ) from exc
+
+
 @app.get("/me", tags=["read"])
 async def me() -> dict[str, Any]:
     """Return the authenticated member's profile."""
@@ -180,6 +206,26 @@ async def me() -> dict[str, Any]:
             status_code=502,
             detail=f"LinkedIn API error: {exc}",
         ) from exc
+
+
+@app.get("/organizations", tags=["read"])
+async def list_organizations() -> dict[str, Any]:
+    """List Company Pages the authenticated member administers (read-only)."""
+    _require_auth()
+    try:
+        return await auth.list_organizations()
+    except Exception as exc:
+        _handle_linkedin_error(exc)
+
+
+@app.get("/organizations/{organization_id}", tags=["read"])
+async def get_organization(organization_id: str) -> dict[str, Any]:
+    """Fetch a single Company Page's details by LinkedIn organization id."""
+    _require_auth()
+    try:
+        return await auth.get_organization(organization_id)
+    except Exception as exc:
+        _handle_linkedin_error(exc)
 
 
 # ---------------------------------------------------------------------------

@@ -200,6 +200,109 @@ async def test_share_content_surfaces_api_error(monkeypatch: pytest.MonkeyPatch)
 
 
 # ---------------------------------------------------------------------------
+# Organization reads
+# ---------------------------------------------------------------------------
+
+
+def test_require_org_scope_raises_without_org_scope(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings, "linkedin_scopes", "openid profile email w_member_social")
+    with pytest.raises(auth.LinkedInScopeMissingError):
+        auth._require_org_scope()
+
+
+def test_require_org_scope_passes_with_org_scope(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings, "linkedin_scopes", "r_organization_social")
+    auth._require_org_scope()  # must not raise
+
+
+@pytest.mark.asyncio
+async def test_list_organizations_returns_companies(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        settings,
+        "linkedin_scopes",
+        "openid profile email w_member_social r_organization_social",
+    )
+    response = _FakeResponse(
+        json_data={
+            "elements": [
+                {
+                    "organization": {
+                        "id": "987654",
+                        "localizedName": "Robotsix",
+                        "vanityName": "robotsix",
+                        "logoV2": {"original": {"url": "https://cdn.example/logo.png"}},
+                    }
+                }
+            ]
+        }
+    )
+    client = _patch_client(monkeypatch, response)
+    auth.tokens.access_token = "token"
+
+    result = await auth.list_organizations()
+
+    element = result["elements"][0]
+    assert element["id"] == "987654"
+    assert element["name"] == "Robotsix"
+    assert element["vanity_name"] == "robotsix"
+    assert element["logo"] == "https://cdn.example/logo.png"
+    _, args, kwargs = client.calls[0]
+    assert "organizationAcls" in str(args[0])
+    assert kwargs["params"]["q"] == "roleAssignee"
+    assert kwargs["headers"]["Authorization"] == "Bearer token"
+
+
+@pytest.mark.asyncio
+async def test_list_organizations_raises_when_scope_missing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings, "linkedin_scopes", "openid profile email w_member_social")
+    auth.tokens.access_token = "token"
+    with pytest.raises(auth.LinkedInScopeMissingError):
+        await auth.list_organizations()
+
+
+@pytest.mark.asyncio
+async def test_get_organization_returns_company(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings, "linkedin_scopes", "r_organization_social")
+    response = _FakeResponse(
+        json_data={
+            "id": "987654",
+            "localizedName": "Robotsix",
+            "vanityName": "robotsix",
+            "logoV2": {"original": {"url": "https://cdn.example/logo.png"}},
+        }
+    )
+    client = _patch_client(monkeypatch, response)
+    auth.tokens.access_token = "token"
+
+    result = await auth.get_organization("987654")
+
+    assert result["id"] == "987654"
+    assert result["name"] == "Robotsix"
+    assert result["vanity_name"] == "robotsix"
+    assert result["logo"] == "https://cdn.example/logo.png"
+    _, args, _ = client.calls[0]
+    assert "organizations/987654" in str(args[0])
+
+
+@pytest.mark.asyncio
+async def test_get_organization_surfaces_linkedin_403(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings, "linkedin_scopes", "r_organization_social")
+    response = _FakeResponse(
+        json_data=None,
+        status_code=403,
+        text='{"message":"Not enough permissions"}',
+    )
+    _patch_client(monkeypatch, response)
+    auth.tokens.access_token = "token"
+
+    with pytest.raises(auth.LinkedInAPIError) as exc:
+        await auth.get_organization("987654")
+    assert exc.value.status_code == 403
+
+
+# ---------------------------------------------------------------------------
 # Token persistence
 # ---------------------------------------------------------------------------
 

@@ -35,9 +35,18 @@ profile reads, and operator-gated write actions (posting / sharing).
 
 ### Read
 
-| Method | Path  | Description                          | Auth required |
-|--------|-------|--------------------------------------|---------------|
-| GET    | `/me` | Authenticated member's profile       | Yes           |
+| Method | Path                    | Description                                            | Auth required |
+|--------|-------------------------|--------------------------------------------------------|---------------|
+| GET    | `/me`                   | Authenticated member's profile                         | Yes           |
+| GET    | `/organizations`        | List Company Pages the member administers (id, name, vanity name, logo) | Yes |
+| GET    | `/organizations/{id}`   | Fetch one Company Page's admin-visible details by organization id | Yes |
+
+> **Organizations note:** `/organizations` and `/organizations/{id}` require
+> LinkedIn **Community Management API access** plus an Organization scope
+> (`r_organization_social` or `rw_organization_admin`) on the OAuth token. If
+> the token's consent lacks the scope, they return a clear **403** explaining
+> that the org scope must be added to `linkedin_scopes` and the operator must
+> re-authenticate — they never fail silently.
 
 ### Write (state-mutating — operator-gated)
 
@@ -47,7 +56,9 @@ profile reads, and operator-gated write actions (posting / sharing).
 
 ## Safety Rules
 
-1. **Read endpoints** (`/me`) are safe to call without operator approval.
+1. **Read endpoints** (`/me`, `/organizations`, `/organizations/{id}`) are
+   safe to call without operator approval. Organization reads are read-only —
+   they never mutate a Company Page.
 2. **Write endpoints** (`/share`) are **state-mutating**. They require:
    - An authenticated session (valid OAuth token).
    - An **operator confirmation token** (issued on first call, consumed on second).
@@ -62,6 +73,9 @@ profile reads, and operator-gated write actions (posting / sharing).
 - `profile` — basic profile data
 - `email` — email address
 - `w_member_social` — create posts / shares (write)
+- `r_organization_social` / `rw_organization_admin` — read Company Pages
+  (organizations). Requires LinkedIn's Community Management API access and
+  must be added to `linkedin_scopes` + re-authenticated once approved.
 
 ## Configuration
 
