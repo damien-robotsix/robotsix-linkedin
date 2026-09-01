@@ -147,6 +147,12 @@ troubleshooting.
 | PUT    | `/config`       | Update configuration and persist       | No            |
 | GET    | `/config/schema`| JSON Schema for the config model       | No            |
 
+### `GET /chat-skill`
+
+Returns the service's SKILL.md document (YAML frontmatter + overview, endpoints,
+and safety rules) as `text/markdown`. Chat agents with chat access use this to
+learn how to drive the service. Always returns 200.
+
 ### `GET /health`
 
 Liveness probe. Always returns 200.

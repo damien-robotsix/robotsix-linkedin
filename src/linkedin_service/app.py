@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, Query
-from fastapi.responses import RedirectResponse
+from fastapi.responses import PlainTextResponse, RedirectResponse
 from pydantic import BaseModel
 from robotsix_config import dump_config
 
@@ -30,6 +31,26 @@ app = FastAPI(
 async def health() -> dict[str, Any]:
     """Liveness probe."""
     return {"status": "ok", "auth_configured": settings.auth_configured}
+
+
+# ---------------------------------------------------------------------------
+# Chat skill
+# ---------------------------------------------------------------------------
+
+CHAT_SKILL_PATH = Path("chat-skill.md")
+
+
+@app.get("/chat-skill", tags=["infra"])
+async def chat_skill() -> PlainTextResponse:
+    """Return the SKILL.md document describing this service to chat agents."""
+    try:
+        content = CHAT_SKILL_PATH.read_text(encoding="utf-8")
+    except OSError as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"chat-skill.md not found: {exc}",
+        ) from exc
+    return PlainTextResponse(content, media_type="text/markdown")
 
 
 # ---------------------------------------------------------------------------

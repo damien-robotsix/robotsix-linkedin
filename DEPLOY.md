@@ -176,6 +176,7 @@ Every service in `deploy/docker-compose.yml` **must** carry:
    | `robotsix.deploy.label.health.endpoint` | HTTP path the deploy plane polls for health |
    | `robotsix.deploy.label.port` | Container port the service listens on |
    | `robotsix.deploy.label.chat-access` | Access level for fleet chat agents (`read`, `write`, or `none`) |
+   | `robotsix.deploy.chat-access` | Standard chat-access opt-in label — set to `"true"` to register the service in the chat roster and require it to serve `GET /chat-skill` |
 
 These requirements match the robotsix fleet contract. Omitting any of them
 causes registration failures when the deploy plane validates the compose file.
