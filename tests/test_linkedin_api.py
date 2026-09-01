@@ -200,28 +200,100 @@ async def test_share_content_surfaces_api_error(monkeypatch: pytest.MonkeyPatch)
 
 
 # ---------------------------------------------------------------------------
+# Org-app OAuth flow
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def _org_credentials(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Configure the dedicated org LinkedIn app."""
+    monkeypatch.setattr(settings, "linkedin_org_client_id", SecretStr("org-cid"))
+    monkeypatch.setattr(settings, "linkedin_org_client_secret", SecretStr("org-secret"))
+
+
+def test_build_org_authorize_url_uses_org_credentials(
+    monkeypatch: pytest.MonkeyPatch, _org_credentials: None
+) -> None:
+    url = auth.build_org_authorize_url()
+    assert url.startswith(auth.AUTHORIZE_URL)
+    assert "client_id=org-cid" in url
+    assert "r_organization_social" in url
+    assert auth.org_tokens.state and auth.org_tokens.state in url
+
+
+def test_build_org_authorize_url_raises_without_org_credentials() -> None:
+    with pytest.raises(RuntimeError, match="org app credentials"):
+        auth.build_org_authorize_url()
+
+
+@pytest.mark.asyncio
+async def test_exchange_org_code_stores_in_org_token_store(
+    monkeypatch: pytest.MonkeyPatch, _org_credentials: None
+) -> None:
+    response = _FakeResponse(
+        json_data={
+            "access_token": "org-abc123",
+            "refresh_token": "org-refresh123",
+            "expires_in": 3600,
+            "token_type": "Bearer",
+        }
+    )
+    client = _patch_client(monkeypatch, response)
+    auth.org_tokens.state = "org-state-1"
+    # The personal token must stay untouched by the org flow.
+    auth.tokens.access_token = "personal-token"
+
+    data = await auth.exchange_org_code("the-code", "org-state-1")
+
+    assert data["access_token"] == "org-abc123"
+    assert auth.org_tokens.access_token == "org-abc123"
+    assert auth.org_tokens.refresh_token == "org-refresh123"
+    assert auth.org_tokens.expires_at > 3600
+    # Personal store is not clobbered.
+    assert auth.tokens.access_token == "personal-token"
+    _, args, kwargs = client.calls[0]
+    assert args[0] == auth.ACCESS_TOKEN_URL
+    assert kwargs["data"]["client_id"] == "org-cid"
+    assert kwargs["data"]["client_secret"] == "org-secret"
+    assert kwargs["data"]["redirect_uri"] == settings.linkedin_org_redirect_uri
+
+
+@pytest.mark.asyncio
+async def test_exchange_org_code_state_mismatch_raises() -> None:
+    auth.org_tokens.state = "expected"
+    with pytest.raises(ValueError, match="state mismatch"):
+        await auth.exchange_org_code("code", "tampered")
+
+
+# ---------------------------------------------------------------------------
 # Organization reads
 # ---------------------------------------------------------------------------
 
 
-def test_require_org_scope_raises_without_org_scope(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(settings, "linkedin_scopes", "openid profile email w_member_social")
+def test_require_org_scope_raises_when_org_app_missing() -> None:
+    with pytest.raises(auth.OrgAppNotConfiguredError):
+        auth._require_org_scope()
+
+
+def test_require_org_scope_raises_without_org_scope(
+    monkeypatch: pytest.MonkeyPatch, _org_credentials: None
+) -> None:
+    monkeypatch.setattr(settings, "linkedin_org_scopes", "openid profile email")
     with pytest.raises(auth.LinkedInScopeMissingError):
         auth._require_org_scope()
 
 
-def test_require_org_scope_passes_with_org_scope(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(settings, "linkedin_scopes", "r_organization_social")
+def test_require_org_scope_passes_with_org_scope(
+    monkeypatch: pytest.MonkeyPatch, _org_credentials: None
+) -> None:
+    # Default linkedin_org_scopes already includes org read scopes.
     auth._require_org_scope()  # must not raise
 
 
 @pytest.mark.asyncio
-async def test_list_organizations_returns_companies(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(
-        settings,
-        "linkedin_scopes",
-        "openid profile email w_member_social r_organization_social",
-    )
+async def test_list_organizations_returns_companies(
+    monkeypatch: pytest.MonkeyPatch, _org_credentials: None
+) -> None:
     response = _FakeResponse(
         json_data={
             "elements": [
@@ -230,14 +302,19 @@ async def test_list_organizations_returns_companies(monkeypatch: pytest.MonkeyPa
                         "id": "987654",
                         "localizedName": "Robotsix",
                         "vanityName": "robotsix",
-                        "logoV2": {"original": {"url": "https://cdn.example/logo.png"}},
+                        "logoV2": {
+                            # Real API: original is the image URN string and
+                            # the resolved object lives under original~.
+                            "original": "urn:li:digitalmediaAsset:C5600AQAbc",
+                            "original~": {"url": "https://cdn.example/logo.png"},
+                        },
                     }
                 }
             ]
         }
     )
     client = _patch_client(monkeypatch, response)
-    auth.tokens.access_token = "token"
+    auth.org_tokens.access_token = "org-token"
 
     result = await auth.list_organizations()
 
@@ -249,32 +326,46 @@ async def test_list_organizations_returns_companies(monkeypatch: pytest.MonkeyPa
     _, args, kwargs = client.calls[0]
     assert "organizationAcls" in str(args[0])
     assert kwargs["params"]["q"] == "roleAssignee"
-    assert kwargs["headers"]["Authorization"] == "Bearer token"
+    # Org reads authenticate with the ORG token, not the personal one.
+    assert kwargs["headers"]["Authorization"] == "Bearer org-token"
 
 
 @pytest.mark.asyncio
 async def test_list_organizations_raises_when_scope_missing(
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch, _org_credentials: None
 ) -> None:
-    monkeypatch.setattr(settings, "linkedin_scopes", "openid profile email w_member_social")
-    auth.tokens.access_token = "token"
+    monkeypatch.setattr(settings, "linkedin_org_scopes", "openid profile email")
+    auth.org_tokens.access_token = "org-token"
     with pytest.raises(auth.LinkedInScopeMissingError):
         await auth.list_organizations()
 
 
 @pytest.mark.asyncio
-async def test_get_organization_returns_company(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(settings, "linkedin_scopes", "r_organization_social")
+async def test_list_organizations_raises_when_org_app_missing() -> None:
+    auth.org_tokens.access_token = "org-token"
+    with pytest.raises(auth.OrgAppNotConfiguredError):
+        await auth.list_organizations()
+
+
+@pytest.mark.asyncio
+async def test_get_organization_returns_company(
+    monkeypatch: pytest.MonkeyPatch, _org_credentials: None
+) -> None:
     response = _FakeResponse(
         json_data={
             "id": "987654",
             "localizedName": "Robotsix",
             "vanityName": "robotsix",
-            "logoV2": {"original": {"url": "https://cdn.example/logo.png"}},
+            "logoV2": {
+                "original": "urn:li:digitalmediaAsset:C5600AQAbc",
+                "original~": {
+                    "elements": [{"url": "https://cdn.example/logo.png"}]
+                },
+            },
         }
     )
     client = _patch_client(monkeypatch, response)
-    auth.tokens.access_token = "token"
+    auth.org_tokens.access_token = "org-token"
 
     result = await auth.get_organization("987654")
 
@@ -282,24 +373,33 @@ async def test_get_organization_returns_company(monkeypatch: pytest.MonkeyPatch)
     assert result["name"] == "Robotsix"
     assert result["vanity_name"] == "robotsix"
     assert result["logo"] == "https://cdn.example/logo.png"
-    _, args, _ = client.calls[0]
+    _, args, kwargs = client.calls[0]
     assert "organizations/987654" in str(args[0])
+    assert kwargs["headers"]["Authorization"] == "Bearer org-token"
 
 
 @pytest.mark.asyncio
-async def test_get_organization_surfaces_linkedin_403(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(settings, "linkedin_scopes", "r_organization_social")
+async def test_get_organization_surfaces_linkedin_403(
+    monkeypatch: pytest.MonkeyPatch, _org_credentials: None
+) -> None:
     response = _FakeResponse(
         json_data=None,
         status_code=403,
         text='{"message":"Not enough permissions"}',
     )
     _patch_client(monkeypatch, response)
-    auth.tokens.access_token = "token"
+    auth.org_tokens.access_token = "org-token"
 
     with pytest.raises(auth.LinkedInAPIError) as exc:
         await auth.get_organization("987654")
     assert exc.value.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_logo_url_never_crashes_on_raw_urn() -> None:
+    """A production logoV2 with a string original must not raise."""
+    org = {"logoV2": {"original": "urn:li:digitalmediaAsset:C5600AQAbc"}}
+    assert auth._logo_url(org) is None
 
 
 # ---------------------------------------------------------------------------

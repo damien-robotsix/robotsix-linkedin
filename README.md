@@ -33,7 +33,7 @@ The service starts on `http://localhost:8000`. Visit `/health` to confirm.
    - **Share on LinkedIn** — required for `w_member_social` scope (write / share).
 5. Wait for product approval (may require LinkedIn review).
 
-### Required Scopes
+### Required Scopes — personal app (Sign In + posts)
 
 | Scope                | Purpose                          |
 |----------------------|----------------------------------|
@@ -41,6 +41,28 @@ The service starts on `http://localhost:8000`. Visit `/health` to confirm.
 | `profile`            | Basic profile data               |
 | `email`              | Member email address             |
 | `w_member_social`    | Create posts / shares (write)    |
+
+### Dedicated org app (Company Page reads)
+
+Reading organization / Company Page data requires LinkedIn's **Community
+Management API**, which must live in a **separate LinkedIn app** with its own
+credentials:
+
+1. Create a second LinkedIn app and request access to **Community Management
+   API** (may require LinkedIn review).
+2. Under **Products**, add **Organization Social Content** /
+   **Community Management** and request the org scopes.
+3. Record the org app's **Client ID** / **Client Secret** and configure
+   `linkedin_org_client_id` / `linkedin_org_client_secret`.
+4. Add `http://localhost:8000/auth/org/callback` to the org app's allowed
+   redirect URLs.
+5. Complete `/auth/org/login` **once** so the org token is stored in its own
+   token file (never overwrites the personal token).
+
+Org scopes (`r_organization_social` / `rw_organization_admin`) are requested
+by the org app's consent flow and are read-only for Company Pages. If the
+org app is not configured, `/organizations` returns a clear 403 (never a
+silent 500).
 
 ## Configuration
 
@@ -67,6 +89,11 @@ GET  /config/schema — JSON Schema for the config model
 | `linkedin_allowed_redirect_uris` | No | `""` | Space- or comma-separated extra redirect URIs |
 | `linkedin_scopes` | No | `openid profile email w_member_social` | Space-separated scope list |
 | `linkedin_token_file` | No | `~/.config/linkedin-service/tokens.json` | Token persistence path (outside the repo) |
+| `linkedin_org_client_id` | No | `""` | Dedicated org-app client ID (secret) |
+| `linkedin_org_client_secret` | No | `""` | Dedicated org-app client secret (secret) |
+| `linkedin_org_redirect_uri` | No | `http://localhost:8000/auth/org/callback` | Org-app OAuth redirect URI |
+| `linkedin_org_scopes` | No | `r_organization_social rw_organization_admin` | Org-app scope list |
+| `linkedin_org_token_file` | No | `~/.config/linkedin-service/org-tokens.json` | Org token persistence path (outside the repo) |
 | `host` | No | `0.0.0.0` | Bind host |
 | `port` | No | `8000` | Bind port |
 | `require_operator_confirmation` | No | `true` | Require confirmation for writes |
@@ -74,7 +101,8 @@ GET  /config/schema — JSON Schema for the config model
 \* When credentials are not configured, the service boots but `/auth/login`
 returns 503. `/health` still returns 200.
 
-Secret fields (`linkedin_client_id`, `linkedin_client_secret`) are masked in
+Secret fields (`linkedin_client_id`, `linkedin_client_secret`,
+`linkedin_org_client_id`, `linkedin_org_client_secret`) are masked in
 `GET /config` responses and marked `writeOnly` in the JSON Schema.
 
 ### Settings panel API
@@ -112,9 +140,10 @@ A minimal `config/config.json`:
 All other fields are optional and fall back to their defaults. The full
 template is at [`config/config.json`](config/config.json) and the schema at
 [`config/config.schema.json`](config/config.schema.json). Secret fields
-(`linkedin_client_id`, `linkedin_client_secret`) use `"format": "password"`
-and `"writeOnly": true` so the deploy plane knows which fields to source
-from a secrets manager rather than a plain config store.
+(`linkedin_client_id`, `linkedin_client_secret`, `linkedin_org_client_id`,
+`linkedin_org_client_secret`) use `"format": "password"` and `"writeOnly":
+true` so the deploy plane knows which fields to source from a secrets
+manager rather than a plain config store.
 
 ### Fleet Deployment
 
@@ -165,6 +194,19 @@ Redirects the operator to LinkedIn's OAuth consent screen. Returns 503 if creden
 
 Handles the OAuth redirect from LinkedIn. Exchanges the authorization code for tokens.
 
+### `GET /auth/org/login`
+
+Redirects the operator to the **dedicated org app's** consent screen
+(Community Management API). Returns 503 if the org app credentials are not
+configured. Its OAuth flow uses an independent token store so the personal
+`/me` + `/share` token is never overwritten.
+
+### `GET /auth/org/callback?code=...&state=...`
+
+Handles the org app's OAuth redirect. Exchanges the authorization code for
+the org token, persisted to `linkedin_org_token_file` (separate from the
+personal token file).
+
 ### `GET /me`
 
 Returns the authenticated member's profile (requires prior OAuth login).
@@ -173,16 +215,20 @@ Returns the authenticated member's profile (requires prior OAuth login).
 
 Lists Company Pages the authenticated member administers (id, name, vanity
 name, logo) via LinkedIn's `organizationAcls` API. Read-only — safe to call
-without operator confirmation. Requires an Organization scope
-(`r_organization_social` or `rw_organization_admin`) on the token; without
-it returns a 403 explaining that Community Management API access + org
-scopes are needed.
+without operator confirmation. Authenticates with the **org app's** token
+(`/auth/org/login`) — never the personal token. Requires the org app to be
+configured (`linkedin_org_client_id` / `linkedin_org_client_secret`) plus an
+Organization scope (`r_organization_social` or `rw_organization_admin`) on
+the org app's consent. If the org app is not configured, the scope is
+missing, or LinkedIn rejects the call, it returns a clear 403 explaining
+that Community Management API access + org scopes are needed — never a
+silent 500.
 
 ### `GET /organizations/{id}`
 
 Fetches a single Company Page's admin-visible details by LinkedIn
 organization id via LinkedIn's `organizations` API. Read-only — safe to call
-without operator confirmation. Same org-scope requirement as
+without operator confirmation. Same org-app + org-scope requirement as
 `GET /organizations`.
 
 ### `POST /share?text=...&visibility=PUBLIC`

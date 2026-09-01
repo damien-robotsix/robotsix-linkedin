@@ -31,6 +31,11 @@ credentials — never commit real secrets to the repository.**
   "linkedin_allowed_redirect_uris": "",
   "linkedin_scopes": "openid profile email w_member_social",
   "linkedin_token_file": "~/.config/linkedin-service/tokens.json",
+  "linkedin_org_client_id": "",
+  "linkedin_org_client_secret": "",
+  "linkedin_org_redirect_uri": "http://localhost:8000/auth/org/callback",
+  "linkedin_org_scopes": "r_organization_social rw_organization_admin",
+  "linkedin_org_token_file": "~/.config/linkedin-service/org-tokens.json",
   "host": "0.0.0.0",
   "port": 8000,
   "require_operator_confirmation": true
@@ -47,8 +52,21 @@ credentials — never commit real secrets to the repository.**
 | `linkedin_allowed_redirect_uris` | No | Space- or comma-separated extra redirect URIs. Leave empty if only one redirect URI is needed. |
 | `linkedin_scopes` | No | OAuth scopes requested on the consent screen. Default covers sign-in and posting. |
 | `linkedin_token_file` | No | Path for persisted OAuth tokens. Set to `""` to disable on-disk persistence. |
+| `linkedin_org_client_id` | No | Dedicated org-app (Community Management API) client ID. Secret — masked in API responses, `writeOnly` in the schema. Empty means `/organizations` returns a clear 403. |
+| `linkedin_org_client_secret` | No | Dedicated org-app client secret. Secret — masked in API responses, `writeOnly` in the schema. |
+| `linkedin_org_redirect_uri` | No | Must match a redirect URL registered on the org LinkedIn app. Default `http://localhost:8000/auth/org/callback`. |
+| `linkedin_org_scopes` | No | Org-app scopes. Default `r_organization_social rw_organization_admin`. |
+| `linkedin_org_token_file` | No | Path for persisted org-app tokens. Separate from `linkedin_token_file` so the org flow never overwrites the personal token. |
 | `host` / `port` | No | Service bind address. Default `0.0.0.0:8000`. |
 | `require_operator_confirmation` | No | When `true`, write endpoints require an explicit confirmation token before calling LinkedIn. |
+
+> **Two LinkedIn apps:** `/me` and `/share` use the personal app
+> (`linkedin_client_id` / `linkedin_client_secret`). Organization / Company
+> Page reads (`/organizations`, `/organizations/{id}`) use a **separate org
+> app** (`linkedin_org_client_id` / `linkedin_org_client_secret`) that must
+> have Community Management API access approved by LinkedIn, plus its own
+> consent flow (`/auth/org/login`, `/auth/org/callback`) so the two token
+> stores coexist.
 
 The full JSON Schema is at [`config/config.schema.json`](config/config.schema.json).
 Secret fields use `"format": "password"` and `"writeOnly": true` annotations
@@ -186,5 +204,7 @@ causes registration failures when the deploy plane validates the compose file.
 | Symptom | Cause | Fix |
 |---|---|---|
 | `/auth/login` returns 503 | Credentials not loaded | Check `config/config.json` was injected; verify `linkedin_client_id` and `linkedin_client_secret` are non-empty. Or set via `PUT /config`. |
+| `/auth/org/login` returns 503 | Org app not configured | Set `linkedin_org_client_id` and `linkedin_org_client_secret`, or `PUT /config`. |
+| `/organizations` returns 403 | Org app unconfigured, org scope missing, or LinkedIn rejected the call | Confirm Community Management API access is approved, `linkedin_org_client_id` / `linkedin_org_client_secret` are set, `linkedin_org_scopes` includes an org scope, and `/auth/org/login` was completed once. |
 | OAuth callback fails with redirect mismatch | `linkedin_redirect_uri` doesn't match LinkedIn app config | Ensure the value in config exactly matches the LinkedIn Developer Portal setting |
 | Container fails to start | Config file not found at `/app/config/config.json` | Verify the `robotsix.deploy.config-target` label and volume mount are correct |
