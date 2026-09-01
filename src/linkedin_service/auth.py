@@ -102,7 +102,7 @@ class TokenStore:
             return
         try:
             data = json.loads(file_path.read_text(encoding="utf-8"))
-        except ValueError, OSError:
+        except (ValueError, OSError):
             return
         self.access_token = data.get("access_token", "")
         self.refresh_token = data.get("refresh_token", "")
