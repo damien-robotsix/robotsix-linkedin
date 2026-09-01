@@ -49,6 +49,21 @@ class Settings(BaseModel):
     # never logged. Set to an empty string to disable on-disk persistence.
     linkedin_token_file: str = "~/.config/linkedin-service/tokens.json"
 
+    # --- Dedicated org LinkedIn app (Community Management API) ---
+    # Reading organization / Company Page data requires LinkedIn's Community
+    # Management API, which must live in a SEPARATE LinkedIn app with its own
+    # credentials, OAuth flow (/auth/org/login) and token store. Keeping a
+    # second app means the org flow never overwrites the personal app's token
+    # used by /me and /share. When these are empty the /organizations
+    # endpoints return a clear 403 (never a silent 500).
+    linkedin_org_client_id: SecretStr = SecretStr("")
+    linkedin_org_client_secret: SecretStr = SecretStr("")
+    linkedin_org_redirect_uri: str = "http://localhost:8000/auth/org/callback"
+    # Organization scopes requested during the org app's consent screen.
+    # One of r_organization_social / rw_organization_admin is required.
+    linkedin_org_scopes: str = "r_organization_social rw_organization_admin"
+    linkedin_org_token_file: str = "~/.config/linkedin-service/org-tokens.json"
+
     # --- Service ---
     host: str = "0.0.0.0"
     port: int = 8000
@@ -84,6 +99,33 @@ class Settings(BaseModel):
         return bool(
             self.linkedin_client_id.get_secret_value()
             and self.linkedin_client_secret.get_secret_value()
+        )
+
+    @property
+    def linkedin_org_scopes_list(self) -> list[str]:
+        return self.linkedin_org_scopes.split()
+
+    @property
+    def org_allowed_redirect_uris_list(self) -> list[str]:
+        """Redirect URIs permitted by the org-app OAuth flow.
+
+        Always includes ``linkedin_org_redirect_uri`` plus any extras
+        declared in ``linkedin_allowed_redirect_uris`` (order preserved,
+        deduped).
+        """
+        extras = [u for u in re.split(r"[,\s]+", self.linkedin_allowed_redirect_uris) if u]
+        uris: list[str] = []
+        for uri in [self.linkedin_org_redirect_uri, *extras]:
+            if uri and uri not in uris:
+                uris.append(uri)
+        return uris
+
+    @property
+    def org_auth_configured(self) -> bool:
+        """Return True when the dedicated org LinkedIn app is configured."""
+        return bool(
+            self.linkedin_org_client_id.get_secret_value()
+            and self.linkedin_org_client_secret.get_secret_value()
         )
 
 

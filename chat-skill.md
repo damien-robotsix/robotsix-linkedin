@@ -1,6 +1,6 @@
 ---
 name: robotsix-linkedin
-description: Drive the LinkedIn API service — read the authenticated profile and post operator-gated shares.
+description: Drive the LinkedIn API service — read the authenticated profile and Company Pages and post operator-gated shares.
 ---
 
 # Chat Skill — robotsix-linkedin
@@ -8,7 +8,15 @@ description: Drive the LinkedIn API service — read the authenticated profile a
 ## Overview
 
 LinkedIn API service for fleet agents. Provides OAuth 2.0 authentication,
-profile reads, and operator-gated write actions (posting / sharing).
+profile reads, organization / Company Page reads, and operator-gated write
+actions (posting / sharing).
+
+Two independent LinkedIn apps are supported so their OAuth tokens never
+clobber each other:
+
+- the **personal app** authenticates `/me` and `/share`;
+- a dedicated **org app** (Community Management API) authenticates the
+  organization read endpoints.
 
 ## Endpoints
 
@@ -28,16 +36,35 @@ profile reads, and operator-gated write actions (posting / sharing).
 
 ### Auth (OAuth 2.0 — 3-legged)
 
-| Method | Path             | Description                                      | Auth required |
-|--------|------------------|--------------------------------------------------|---------------|
-| GET    | `/auth/login`    | Redirect operator to LinkedIn consent screen     | No            |
-| GET    | `/auth/callback` | OAuth redirect handler — exchanges code for token | No            |
+| Method | Path                  | Description                                                    | Auth required |
+|--------|-----------------------|----------------------------------------------------------------|---------------|
+| GET    | `/auth/login`         | Redirect operator to LinkedIn consent screen (personal app)    | No            |
+| GET    | `/auth/callback`      | Personal-app OAuth redirect handler — exchanges code for token | No            |
+| GET    | `/auth/org/login`     | Redirect operator to consent screen for the dedicated org app  | No            |
+| GET    | `/auth/org/callback`  | Org-app OAuth redirect handler — exchanges code for org token  | No            |
+
+> **Two apps:** the org app is a **separate LinkedIn application** with its
+> own client id/secret, consent flow (`/auth/org/login` +
+> `/auth/org/callback`) and token store. Run the org consent flow **once**
+> per org app so `/organizations` gets a valid org token; the personal
+> `/me` + `/share` flow is untouched.
 
 ### Read
 
-| Method | Path  | Description                          | Auth required |
-|--------|-------|--------------------------------------|---------------|
-| GET    | `/me` | Authenticated member's profile       | Yes           |
+| Method | Path                  | Description                                            | Auth required       |
+|--------|-----------------------|--------------------------------------------------------|---------------------|
+| GET    | `/me`                 | Authenticated member's profile (personal app token)    | Yes (personal app)  |
+| GET    | `/organizations`      | List Company Pages the member administers (id, name, vanity name, logo) | Yes (org app) |
+| GET    | `/organizations/{id}` | Fetch one Company Page's admin-visible details by organization id | Yes (org app) |
+
+> **Organizations note:** `/organizations` and `/organizations/{id}`
+> authenticate with the **org app's** token (`/auth/org/login`), not the
+> personal token. They require the dedicated org app to be configured
+> (`linkedin_org_client_id` / `linkedin_org_client_secret`) plus one
+> Organization scope (`r_organization_social` or `rw_organization_admin`).
+> If the org app is not configured, if the org scopes are missing, or if
+> LinkedIn rejects the call (403), they return a clear **403** explaining
+> what is needed — never a silent 500.
 
 ### Write (state-mutating — operator-gated)
 
@@ -47,7 +74,9 @@ profile reads, and operator-gated write actions (posting / sharing).
 
 ## Safety Rules
 
-1. **Read endpoints** (`/me`) are safe to call without operator approval.
+1. **Read endpoints** (`/me`, `/organizations`, `/organizations/{id}`) are
+   safe to call without operator approval. Organization reads are read-only —
+   they never mutate a Company Page.
 2. **Write endpoints** (`/share`) are **state-mutating**. They require:
    - An authenticated session (valid OAuth token).
    - An **operator confirmation token** (issued on first call, consumed on second).
@@ -58,10 +87,15 @@ profile reads, and operator-gated write actions (posting / sharing).
 
 ## Required Scopes
 
-- `openid` — OpenID Connect authentication
-- `profile` — basic profile data
-- `email` — email address
-- `w_member_social` — create posts / shares (write)
+- **Personal app (`/me`, `/share`)**:
+  - `openid` — OpenID Connect authentication
+  - `profile` — basic profile data
+  - `email` — email address
+  - `w_member_social` — create posts / shares (write)
+- **Org app (organization reads)**:
+  - `r_organization_social` / `rw_organization_admin` — read Company Pages.
+    Requires LinkedIn's Community Management API access on the separate org
+    app and re-authentication via `/auth/org/login` once approved.
 
 ## Configuration
 
@@ -80,18 +114,24 @@ GET  /config/schema   — JSON Schema for the config model
 
 | Field | Required | Default | Description |
 |---|---|---|---|
-| `linkedin_client_id` | Yes | `""` | LinkedIn app OAuth 2.0 client ID (secret) |
-| `linkedin_client_secret` | Yes | `""` | LinkedIn app OAuth 2.0 client secret (secret) |
-| `linkedin_redirect_uri` | Yes | `http://localhost:8000/auth/callback` | OAuth redirect URI |
+| `linkedin_client_id` | Yes | `""` | Personal LinkedIn app OAuth 2.0 client ID (secret) |
+| `linkedin_client_secret` | Yes | `""` | Personal LinkedIn app client secret (secret) |
+| `linkedin_redirect_uri` | Yes | `http://localhost:8000/auth/callback` | Personal-app OAuth redirect URI |
 | `linkedin_allowed_redirect_uris` | No | `""` | Space- or comma-separated extra redirect URIs |
-| `linkedin_scopes` | No | `openid profile email w_member_social` | OAuth scopes |
-| `linkedin_token_file` | No | `~/.config/linkedin-service/tokens.json` | Token persistence path |
+| `linkedin_scopes` | No | `openid profile email w_member_social` | Personal-app OAuth scopes |
+| `linkedin_token_file` | No | `~/.config/linkedin-service/tokens.json` | Personal token persistence path |
+| `linkedin_org_client_id` | No | `""` | Dedicated org-app client ID (secret) |
+| `linkedin_org_client_secret` | No | `""` | Dedicated org-app client secret (secret) |
+| `linkedin_org_redirect_uri` | No | `http://localhost:8000/auth/org/callback` | Org-app OAuth redirect URI |
+| `linkedin_org_scopes` | No | `r_organization_social rw_organization_admin` | Org-app scopes |
+| `linkedin_org_token_file` | No | `~/.config/linkedin-service/org-tokens.json` | Org token persistence path |
 | `host` | No | `0.0.0.0` | Bind host |
 | `port` | No | `8000` | Bind port |
 | `require_operator_confirmation` | No | `true` | Require confirmation for writes |
 
-Secret fields (`linkedin_client_id`, `linkedin_client_secret`) are masked in
+Secret fields (`linkedin_client_id`, `linkedin_client_secret`,
+`linkedin_org_client_id`, `linkedin_org_client_secret`) are masked in
 `GET /config` responses and marked `writeOnly` in the JSON Schema.
 
 When credentials are not yet configured, the service boots but `/auth/login`
-returns 503.
+(and `/auth/org/login` for the org app) return 503.

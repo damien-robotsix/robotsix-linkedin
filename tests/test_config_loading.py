@@ -47,6 +47,9 @@ def test_template_config_json_is_valid_and_loadable() -> None:
     assert settings.linkedin_client_id.get_secret_value() == ""
     assert settings.linkedin_client_secret.get_secret_value() == ""
     assert settings.auth_configured is False
+    assert settings.linkedin_org_client_id.get_secret_value() == ""
+    assert settings.linkedin_org_client_secret.get_secret_value() == ""
+    assert settings.org_auth_configured is False
     assert settings.port == 8000
 
 
@@ -64,6 +67,11 @@ def test_every_setting_key_loads_from_config_file(tmp_path: Path) -> None:
         "linkedin_allowed_redirect_uris": "https://alt.example.com/cb",
         "linkedin_scopes": "openid profile",
         "linkedin_token_file": "/var/lib/linkedin/tokens.json",
+        "linkedin_org_client_id": "org-cid-from-file",
+        "linkedin_org_client_secret": "org-csecret-from-file",
+        "linkedin_org_redirect_uri": "https://app.example.com/auth/org/callback",
+        "linkedin_org_scopes": "r_organization_social",
+        "linkedin_org_token_file": "/var/lib/linkedin/org-tokens.json",
         "host": "127.0.0.1",
         "port": 9443,
         "require_operator_confirmation": False,
@@ -79,6 +87,11 @@ def test_every_setting_key_loads_from_config_file(tmp_path: Path) -> None:
     assert settings.linkedin_allowed_redirect_uris == "https://alt.example.com/cb"
     assert settings.linkedin_scopes == "openid profile"
     assert settings.linkedin_token_file == "/var/lib/linkedin/tokens.json"
+    assert settings.linkedin_org_client_id.get_secret_value() == "org-cid-from-file"
+    assert settings.linkedin_org_client_secret.get_secret_value() == "org-csecret-from-file"
+    assert settings.linkedin_org_redirect_uri == "https://app.example.com/auth/org/callback"
+    assert settings.linkedin_org_scopes == "r_organization_social"
+    assert settings.linkedin_org_token_file == "/var/lib/linkedin/org-tokens.json"
     assert settings.host == "127.0.0.1"
     assert settings.port == 9443
     assert settings.require_operator_confirmation is False
@@ -90,6 +103,12 @@ def test_every_setting_key_loads_from_config_file(tmp_path: Path) -> None:
         "https://alt.example.com/cb",
     ]
     assert settings.auth_configured is True
+    assert settings.linkedin_org_scopes_list == ["r_organization_social"]
+    assert settings.org_allowed_redirect_uris_list == [
+        "https://app.example.com/auth/org/callback",
+        "https://alt.example.com/cb",
+    ]
+    assert settings.org_auth_configured is True
 
 
 # ---------------------------------------------------------------------------
@@ -104,7 +123,9 @@ def test_missing_config_file_falls_back_to_defaults(tmp_path: Path) -> None:
     assert settings.port == 8000
     assert settings.host == "0.0.0.0"
     assert settings.linkedin_scopes == "openid profile email w_member_social"
+    assert settings.linkedin_org_scopes == "r_organization_social rw_organization_admin"
     assert settings.auth_configured is False
+    assert settings.org_auth_configured is False
 
 
 def test_malformed_json_config_raises(tmp_path: Path) -> None:
@@ -158,6 +179,10 @@ def _apply_settings(monkeypatch: pytest.MonkeyPatch, source: Settings) -> None:
         "linkedin_redirect_uri",
         "linkedin_allowed_redirect_uris",
         "linkedin_scopes",
+        "linkedin_org_client_id",
+        "linkedin_org_client_secret",
+        "linkedin_org_redirect_uri",
+        "linkedin_org_scopes",
     ):
         monkeypatch.setattr(auth.settings, field, getattr(source, field))
 
@@ -186,6 +211,34 @@ def test_config_credentials_build_authorize_url(
     assert "client_id=cid-xyz" in url
     assert "redirect_uri=https%3A%2F%2Fapp.example.com%2Fauth%2Fcallback" in url
     assert "openid" in url and "w_member_social" in url
+
+
+def test_config_credentials_build_org_authorize_url(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Org-app OAuth credentials from the config file drive the org consent URL."""
+    cfg = tmp_path / "config.json"
+    cfg.write_text(
+        json.dumps(
+            {
+                "linkedin_org_client_id": "org-cid-xyz",
+                "linkedin_org_client_secret": "org-csecret-xyz",
+                "linkedin_org_redirect_uri": "https://app.example.com/auth/org/callback",
+                "linkedin_org_scopes": "r_organization_social rw_organization_admin",
+            }
+        ),
+        encoding="utf-8",
+    )
+    source = load_config(Settings, cfg)
+    _apply_settings(monkeypatch, source)
+
+    url = auth.build_org_authorize_url()
+
+    assert "client_id=org-cid-xyz" in url
+    assert (
+        "redirect_uri=https%3A%2F%2Fapp.example.com%2Fauth%2Forg%2Fcallback" in url
+    )
+    assert "r_organization_social" in url and "rw_organization_admin" in url
 
 
 class _FakeResponse:

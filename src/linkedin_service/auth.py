@@ -102,7 +102,7 @@ class TokenStore:
             return
         try:
             data = json.loads(file_path.read_text(encoding="utf-8"))
-        except ValueError, OSError:
+        except (ValueError, OSError):
             return
         self.access_token = data.get("access_token", "")
         self.refresh_token = data.get("refresh_token", "")
@@ -113,6 +113,13 @@ tokens = TokenStore()
 # Load any previously persisted tokens so a restart does not force the
 # operator to redo the OAuth consent flow.
 tokens.load()
+
+# Second, fully independent token store for the dedicated org LinkedIn app
+# (Community Management API). Org reads authenticate with THIS token, never
+# the personal one, so the two OAuth flows coexist without clobbering each
+# other.
+org_tokens = TokenStore()
+org_tokens.load(settings.linkedin_org_token_file)
 
 # Pending confirmation tokens for write operations.
 _pending_confirmations: dict[str, dict[str, Any]] = {}
@@ -221,6 +228,97 @@ async def refresh_access_token() -> dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
+# Org-app OAuth flow (dedicated LinkedIn app for Community Management API)
+# ---------------------------------------------------------------------------
+#
+# The org app has its own client credentials, redirect URI, scopes and token
+# store, and its own consent/callback routes (/auth/org/login,
+# /auth/org/callback). It is deliberately isolated from the personal app's
+# flow so neither token store overwrites the other.
+
+
+def validate_org_redirect_uri(uri: str) -> None:
+    """Ensure ``uri`` is on the org-app redirect allowlist."""
+    if uri not in settings.org_allowed_redirect_uris_list:
+        raise ValueError(f"redirect_uri {uri!r} is not on the org allowlist.")
+
+
+def build_org_authorize_url() -> str:
+    """Return the LinkedIn consent-screen URL for the org app.
+
+    Raises RuntimeError if the org app credentials are not configured and
+    ValueError if the configured redirect URI is not on the allowlist.
+    """
+    if not settings.org_auth_configured:
+        raise RuntimeError("LinkedIn org app credentials are not configured.")
+    validate_org_redirect_uri(settings.linkedin_org_redirect_uri)
+    state = secrets.token_urlsafe(16)
+    org_tokens.state = state
+    params = {
+        "response_type": "code",
+        "client_id": settings.linkedin_org_client_id.get_secret_value(),
+        "redirect_uri": settings.linkedin_org_redirect_uri,
+        "state": state,
+        "scope": " ".join(settings.linkedin_org_scopes_list),
+    }
+    return f"{AUTHORIZE_URL}?{urllib.parse.urlencode(params)}"
+
+
+async def exchange_org_code(code: str, state: str) -> dict[str, Any]:
+    """Exchange an org-app authorization code for tokens.
+
+    Tokens land in ``org_tokens`` (never ``tokens``). Raises on mismatched
+    state or HTTP error.
+    """
+    if state != org_tokens.state:
+        raise ValueError("OAuth state mismatch — possible CSRF.")
+    validate_org_redirect_uri(settings.linkedin_org_redirect_uri)
+    async with httpx.AsyncClient() as client:
+        resp = await client.post(
+            ACCESS_TOKEN_URL,
+            data={
+                "grant_type": "authorization_code",
+                "code": code,
+                "redirect_uri": settings.linkedin_org_redirect_uri,
+                "client_id": settings.linkedin_org_client_id.get_secret_value(),
+                "client_secret": settings.linkedin_org_client_secret.get_secret_value(),
+            },
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+        )
+        _raise_for_status(resp)
+    data: dict[str, Any] = resp.json()
+    org_tokens.access_token = data["access_token"]
+    org_tokens.refresh_token = data.get("refresh_token", "")
+    org_tokens.expires_at = time.time() + float(data.get("expires_in", 0))
+    org_tokens.save(settings.linkedin_org_token_file)
+    return data
+
+
+async def refresh_org_access_token() -> dict[str, Any]:
+    """Use the stored org refresh token to obtain a new org access token."""
+    if not org_tokens.refresh_token:
+        raise RuntimeError("No org refresh token available.")
+    async with httpx.AsyncClient() as client:
+        resp = await client.post(
+            ACCESS_TOKEN_URL,
+            data={
+                "grant_type": "refresh_token",
+                "refresh_token": org_tokens.refresh_token,
+                "client_id": settings.linkedin_org_client_id.get_secret_value(),
+                "client_secret": settings.linkedin_org_client_secret.get_secret_value(),
+            },
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+        )
+        _raise_for_status(resp)
+    data: dict[str, Any] = resp.json()
+    org_tokens.access_token = data["access_token"]
+    org_tokens.refresh_token = data.get("refresh_token", org_tokens.refresh_token)
+    org_tokens.expires_at = time.time() + float(data.get("expires_in", 0))
+    org_tokens.save(settings.linkedin_org_token_file)
+    return data
+
+
+# ---------------------------------------------------------------------------
 # LinkedIn API wrappers
 # ---------------------------------------------------------------------------
 
@@ -228,6 +326,14 @@ async def refresh_access_token() -> dict[str, Any]:
 def _auth_headers() -> dict[str, str]:
     return {
         "Authorization": f"Bearer {tokens.access_token}",
+        "Content-Type": "application/json",
+    }
+
+
+def _org_auth_headers() -> dict[str, str]:
+    """Auth headers for the dedicated org LinkedIn app's token."""
+    return {
+        "Authorization": f"Bearer {org_tokens.access_token}",
         "Content-Type": "application/json",
     }
 
@@ -278,3 +384,153 @@ async def share_content(text: str, visibility: str = "PUBLIC") -> dict[str, Any]
             body = {}
     urn = resp.headers.get("x-restli-id") or body.get("id")
     return {"id": urn, "urn": urn, "author": person_urn, "response": body}
+
+
+# ---------------------------------------------------------------------------
+# Organization / Company Page reads
+# ---------------------------------------------------------------------------
+#
+# Reading an organization's Company Page requires LinkedIn's Organization
+# APIs (organizationAcls / organizations), which are gated behind the
+# Community Management API access request plus one of the Organization
+# scopes below. These scopes must be present on a SEPARATE org app's OAuth
+# token (requested via ``linkedin_org_scopes`` at consent time and
+# re-authenticated once LinkedIn approves the request), stored in its own
+# token store so the personal app's token is never touched. Without them
+# LinkedIn rejects the calls with a generic 403, so we fail early with a
+# clear, actionable explanation instead.
+
+ORG_READ_SCOPES = frozenset({"r_organization_social", "rw_organization_admin"})
+
+
+class OrgAppNotConfiguredError(RuntimeError):
+    """Raised when the dedicated org LinkedIn app is not configured.
+
+    Surfaced to callers as a 403 explaining that Community Management API
+    access plus an org app with Organization scopes is required, rather than
+    an opaque upstream failure.
+    """
+
+
+class LinkedInScopeMissingError(RuntimeError):
+    """Raised when the org scope is not present on the org token/consent.
+
+    Surfaced to callers as a 403 explaining that Community Management API
+    access plus an Organization scope is required, rather than an opaque
+    upstream failure.
+    """
+
+
+def _require_org_scope() -> None:
+    """Guard organization reads behind a fully-configured org app.
+
+    Raises :class:`OrgAppNotConfiguredError` when the dedicated org app
+    credentials are absent, and :class:`LinkedInScopeMissingError` when
+    ``linkedin_org_scopes`` does not include one of the Organization scopes.
+    """
+    if not settings.org_auth_configured:
+        raise OrgAppNotConfiguredError(
+            "Cannot read LinkedIn organizations: the dedicated org LinkedIn "
+            "app is not configured. Company Page reads require Community "
+            "Management API access (requested and approved by LinkedIn) using "
+            "a separate org app. Set linkedin_org_client_id and "
+            "linkedin_org_client_secret, then complete /auth/org/login once "
+            "to obtain an org token."
+        )
+    if not ORG_READ_SCOPES.intersection(settings.linkedin_org_scopes_list):
+        raise LinkedInScopeMissingError(
+            "Cannot read LinkedIn organizations: the org app's token consent "
+            "does not include an Organization scope. Community Management API "
+            "access must be approved by LinkedIn and an org scope "
+            "(r_organization_social or rw_organization_admin) must be present "
+            "in linkedin_org_scopes, then the operator must re-authenticate "
+            "via /auth/org/login."
+        )
+
+
+def _logo_url(org: dict[str, Any]) -> str | None:
+    """Extract the logo CDN URL from an org's ``logoV2`` decoration.
+
+    On the real API ``logoV2.original`` is the image **URN string**, and the
+    resolved image object sits at ``logoV2.original~`` (carrying a ``url``,
+    or an ``elements`` list whose entries expose a ``url`` / ``identifiers``
+    URL). We read the decorated ``original~`` only, so a raw URN string never
+    crashes extraction. Returns None when not decorated.
+    """
+    logo_v2 = org.get("logoV2")
+    if not isinstance(logo_v2, dict):
+        return None
+    resolved = logo_v2.get("original~")
+    if not isinstance(resolved, dict):
+        return None
+    url = resolved.get("url")
+    if isinstance(url, str) and url:
+        return url
+    for element in resolved.get("elements") or []:
+        if not isinstance(element, dict):
+            continue
+        url = element.get("url")
+        if isinstance(url, str) and url:
+            return url
+        for identifier in element.get("identifiers") or []:
+            if not isinstance(identifier, dict):
+                continue
+            candidate = identifier.get("identifier")
+            if isinstance(candidate, str) and candidate.startswith("http"):
+                return candidate
+    return None
+
+
+async def list_organizations() -> dict[str, Any]:
+    """List Company Pages the authenticated member administers (read-only).
+
+    Calls ``organizationAcls`` filtered to ADMINISTRATOR role assignments and
+    resolves each organization's id, name, vanity name and logo.
+    """
+    _require_org_scope()
+    params = {
+        "q": "roleAssignee",
+        "role": "ADMINISTRATOR",
+        "projection": "(elements*(organization~(id,localizedName,vanityName,logoV2)))",
+    }
+    async with httpx.AsyncClient() as client:
+        resp = await client.get(
+            f"{API_BASE}/organizationAcls",
+            params=params,
+            headers=_org_auth_headers(),
+        )
+        _raise_for_status(resp)
+    data: dict[str, Any] = resp.json()
+    companies: list[dict[str, Any]] = []
+    for element in data.get("elements") or []:
+        org = element.get("organization") or {}
+        companies.append(
+            {
+                "id": org.get("id"),
+                "name": org.get("localizedName"),
+                "vanity_name": org.get("vanityName"),
+                "logo": _logo_url(org),
+            }
+        )
+    return {"elements": companies}
+
+
+async def get_organization(organization_id: str) -> dict[str, Any]:
+    """Fetch a single Company Page's details by LinkedIn organization id."""
+    _require_org_scope()
+    params = {"projection": "(id,localizedName,vanityName,logoV2)"}
+    async with httpx.AsyncClient() as client:
+        resp = await client.get(
+            f"{API_BASE}/organizations/{organization_id}",
+            params=params,
+            headers=_org_auth_headers(),
+        )
+        _raise_for_status(resp)
+    org: dict[str, Any] = resp.json()
+    return {
+        "id": org.get("id"),
+        "name": org.get("localizedName"),
+        "vanity_name": org.get("vanityName"),
+        "logo": _logo_url(org),
+        "organization": org,
+    }

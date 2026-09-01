@@ -35,6 +35,35 @@
       "title": "Linkedin Token File",
       "type": "string"
     },
+    "linkedin_org_client_id": {
+      "default": "",
+      "format": "password",
+      "title": "Linkedin Org Client Id",
+      "type": "string",
+      "writeOnly": true
+    },
+    "linkedin_org_client_secret": {
+      "default": "",
+      "format": "password",
+      "title": "Linkedin Org Client Secret",
+      "type": "string",
+      "writeOnly": true
+    },
+    "linkedin_org_redirect_uri": {
+      "default": "http://localhost:8000/auth/org/callback",
+      "title": "Linkedin Org Redirect Uri",
+      "type": "string"
+    },
+    "linkedin_org_scopes": {
+      "default": "r_organization_social rw_organization_admin",
+      "title": "Linkedin Org Scopes",
+      "type": "string"
+    },
+    "linkedin_org_token_file": {
+      "default": "~/.config/linkedin-service/org-tokens.json",
+      "title": "Linkedin Org Token File",
+      "type": "string"
+    },
     "host": {
       "default": "0.0.0.0",
       "title": "Host",

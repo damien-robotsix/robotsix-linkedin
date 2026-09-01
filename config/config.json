@@ -5,6 +5,11 @@
   "linkedin_allowed_redirect_uris": "",
   "linkedin_scopes": "openid profile email w_member_social",
   "linkedin_token_file": "~/.config/linkedin-service/tokens.json",
+  "linkedin_org_client_id": "",
+  "linkedin_org_client_secret": "",
+  "linkedin_org_redirect_uri": "http://localhost:8000/auth/org/callback",
+  "linkedin_org_scopes": "r_organization_social rw_organization_admin",
+  "linkedin_org_token_file": "~/.config/linkedin-service/org-tokens.json",
   "host": "0.0.0.0",
   "port": 8000,
   "require_operator_confirmation": true
