@@ -1,3 +1,8 @@
+---
+name: robotsix-linkedin
+description: Drive the LinkedIn API service — read the authenticated profile and post operator-gated shares.
+---
+
 # Chat Skill — robotsix-linkedin
 
 ## Overview

@@ -13,6 +13,7 @@ services:
       - linkedin-config:/app/config
     labels:
       robotsix.deploy.config-target: /app/config/config.json
+      robotsix.deploy.chat-access: "true"
       robotsix.deploy.label.service: linkedin-api
       robotsix.deploy.label.description: "LinkedIn API service for fleet agents — OAuth 2.0 authentication, profile reads, and operator-gated writes."
       robotsix.deploy.label.health.endpoint: /health

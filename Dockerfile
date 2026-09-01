@@ -4,6 +4,7 @@ WORKDIR /app
 
 # Install dependencies first (layer cache)
 COPY pyproject.toml ./
+COPY chat-skill.md ./
 COPY src/ src/
 
 RUN apt-get update && apt-get install -y --no-install-recommends git \
