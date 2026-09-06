@@ -23,6 +23,9 @@ jobs:
       - name: Install robotsix-config from GitHub
         run: pip install "robotsix-config @ git+https://github.com/damien-robotsix/robotsix-config@b68476fa9aab58f70697d870da956220ecf9cf48"
 
+      - name: Install robotsix-http from GitHub
+        run: pip install "robotsix-http @ git+https://github.com/damien-robotsix/robotsix-http@0dfb8eccd60942cdcb401d78f054e388a9c84a9b"
+
       - name: Install dependencies
         run: pip install ".[dev]"
 

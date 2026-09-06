@@ -41,9 +41,22 @@ class _FakeResponse:
     def json(self) -> dict[str, Any]:
         return self._json
 
+    def raise_for_status(self) -> None:
+        """Mimic ``httpx.Response.raise_for_status`` for RetryClient."""
+        if self.is_error:
+            raise httpx.HTTPStatusError(
+                f"HTTP {self.status_code}",
+                request=httpx.Request("GET", "https://example.test"),
+                response=self,  # type: ignore[arg-type]
+            )
+
 
 class _FakeClient:
-    """Async context-manager stand-in for httpx.AsyncClient."""
+    """Async context-manager stand-in for httpx.AsyncClient.
+
+    ``RetryClient`` drives the underlying client through ``request(method,
+    url, ...)``, so that is the single entry point recorded here.
+    """
 
     def __init__(self, response: _FakeResponse) -> None:
         self._response = response
@@ -55,12 +68,8 @@ class _FakeClient:
     async def __aexit__(self, *_exc: object) -> bool:
         return False
 
-    async def post(self, *args: Any, **kwargs: Any) -> _FakeResponse:
-        self.calls.append(("post", args, kwargs))
-        return self._response
-
-    async def get(self, *args: Any, **kwargs: Any) -> _FakeResponse:
-        self.calls.append(("get", args, kwargs))
+    async def request(self, method: str, url: str, **kwargs: Any) -> _FakeResponse:
+        self.calls.append((method.lower(), (url,), kwargs))
         return self._response
 
 
@@ -68,6 +77,28 @@ def _patch_client(monkeypatch: pytest.MonkeyPatch, response: _FakeResponse) -> _
     client = _FakeClient(response)
     monkeypatch.setattr(auth.httpx, "AsyncClient", lambda *a, **k: client)
     return client
+
+
+class _SequenceClient:
+    """Fake client that returns a queued sequence of responses.
+
+    Lets a test assert that RetryClient re-issued the request after a
+    transient failure.
+    """
+
+    def __init__(self, responses: list[_FakeResponse]) -> None:
+        self._responses = list(responses)
+        self.calls: list[tuple[str, tuple[Any, ...], dict[str, Any]]] = []
+
+    async def __aenter__(self) -> _SequenceClient:
+        return self
+
+    async def __aexit__(self, *_exc: object) -> bool:
+        return False
+
+    async def request(self, method: str, url: str, **kwargs: Any) -> _FakeResponse:
+        self.calls.append((method.lower(), (url,), kwargs))
+        return self._responses.pop(0)
 
 
 @pytest.fixture
@@ -197,6 +228,61 @@ async def test_share_content_surfaces_api_error(monkeypatch: pytest.MonkeyPatch)
         await auth.share_content("hello", "PUBLIC")
     assert exc.value.status_code == 403
     assert "permissions" in str(exc.value)
+
+
+# ---------------------------------------------------------------------------
+# RetryClient behaviour (robotsix-http adoption)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_get_profile_retries_transient_5xx(monkeypatch: pytest.MonkeyPatch) -> None:
+    """An idempotent GET read is retried through RetryClient on a 5xx."""
+
+    async def _no_sleep(_delay: float) -> None:
+        return None
+
+    monkeypatch.setattr("asyncio.sleep", _no_sleep)
+    client = _SequenceClient(
+        [
+            _FakeResponse(json_data=None, status_code=503, text="unavailable"),
+            _FakeResponse(json_data={"sub": "member-7"}),
+        ]
+    )
+    monkeypatch.setattr(auth.httpx, "AsyncClient", lambda *a, **k: client)
+    auth.tokens.access_token = "token"
+
+    result = await auth.get_profile()
+
+    assert result["sub"] == "member-7"
+    # Transient 503 then success => exactly two attempts.
+    assert len(client.calls) == 2
+
+
+@pytest.mark.asyncio
+async def test_share_content_not_retried_on_5xx(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The write POST is idempotency-gated: a 5xx surfaces without retry."""
+
+    async def fake_profile() -> dict[str, Any]:
+        return {"sub": "member-42"}
+
+    async def _no_sleep(_delay: float) -> None:  # pragma: no cover - must not run
+        raise AssertionError("write POST must not be retried")
+
+    monkeypatch.setattr("asyncio.sleep", _no_sleep)
+    monkeypatch.setattr(auth, "get_profile", fake_profile)
+    client = _SequenceClient(
+        [_FakeResponse(json_data=None, status_code=503, text="unavailable")]
+    )
+    monkeypatch.setattr(auth.httpx, "AsyncClient", lambda *a, **k: client)
+    auth.tokens.access_token = "token"
+
+    with pytest.raises(auth.LinkedInAPIError) as exc:
+        await auth.share_content("hello", "PUBLIC")
+
+    assert exc.value.status_code == 503
+    # A single attempt: the server may have acted, so no duplicate post.
+    assert len(client.calls) == 1
 
 
 # ---------------------------------------------------------------------------
