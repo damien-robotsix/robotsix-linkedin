@@ -256,9 +256,17 @@ class _FakeResponse:
     def json(self) -> dict[str, Any]:
         return self._json
 
+    def raise_for_status(self) -> None:
+        """No-op success response for RetryClient."""
+        return None
+
 
 class _FakeClient:
-    """Async context-manager stand-in for ``httpx.AsyncClient``."""
+    """Async context-manager stand-in for ``httpx.AsyncClient``.
+
+    ``RetryClient`` calls ``request(method, url, ...)``, so requests are
+    recorded there (kwargs only, matching the prior ``post`` shape).
+    """
 
     def __init__(self, response: _FakeResponse) -> None:
         self._response = response
@@ -270,7 +278,7 @@ class _FakeClient:
     async def __aexit__(self, *_exc: object) -> bool:
         return False
 
-    async def post(self, *_args: Any, **kwargs: Any) -> _FakeResponse:
+    async def request(self, method: str, url: str, **kwargs: Any) -> _FakeResponse:
         self.calls.append(kwargs)
         return self._response
 

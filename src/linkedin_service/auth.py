@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any
 
 import httpx
+from robotsix_http import ExternalHTTPError, RetryClient
 
 from .config import settings
 
@@ -38,10 +39,27 @@ class LinkedInAPIError(RuntimeError):
         super().__init__(f"LinkedIn API returned {status_code}: {body}")
 
 
-def _raise_for_status(resp: httpx.Response) -> None:
-    """Raise :class:`LinkedInAPIError` with the response body on error."""
-    if resp.is_error:
-        raise LinkedInAPIError(resp.status_code, resp.text)
+async def _retry_send(
+    client: httpx.AsyncClient,
+    method: str,
+    url: str,
+    **kwargs: Any,
+) -> httpx.Response:
+    """Send a request through robotsix-http's ``RetryClient``.
+
+    Transient 5xx / connection errors are retried with backoff, consistently
+    with the rest of the fleet. ``RetryClient`` gates POST/PATCH retries to
+    pre-delivery (connection) failures, so token exchanges and the share
+    write are never duplicated, while idempotent GET reads and token refresh
+    retry freely. Any terminal HTTP error is re-mapped to
+    :class:`LinkedInAPIError` to preserve the existing caller contract.
+    """
+    try:
+        return await RetryClient(client).request(method, url, **kwargs)
+    except ExternalHTTPError as exc:
+        raise LinkedInAPIError(exc.status_code, exc.response.text) from exc
+    except httpx.HTTPStatusError as exc:
+        raise LinkedInAPIError(exc.response.status_code, exc.response.text) from exc
 
 
 @dataclass
@@ -183,7 +201,9 @@ async def exchange_code(code: str, state: str) -> dict[str, Any]:
         raise ValueError("OAuth state mismatch — possible CSRF.")
     validate_redirect_uri(settings.linkedin_redirect_uri)
     async with httpx.AsyncClient() as client:
-        resp = await client.post(
+        resp = await _retry_send(
+            client,
+            "POST",
             ACCESS_TOKEN_URL,
             data={
                 "grant_type": "authorization_code",
@@ -194,7 +214,6 @@ async def exchange_code(code: str, state: str) -> dict[str, Any]:
             },
             headers={"Content-Type": "application/x-www-form-urlencoded"},
         )
-        _raise_for_status(resp)
     data: dict[str, Any] = resp.json()
     tokens.access_token = data["access_token"]
     tokens.refresh_token = data.get("refresh_token", "")
@@ -208,7 +227,9 @@ async def refresh_access_token() -> dict[str, Any]:
     if not tokens.refresh_token:
         raise RuntimeError("No refresh token available.")
     async with httpx.AsyncClient() as client:
-        resp = await client.post(
+        resp = await _retry_send(
+            client,
+            "POST",
             ACCESS_TOKEN_URL,
             data={
                 "grant_type": "refresh_token",
@@ -218,7 +239,6 @@ async def refresh_access_token() -> dict[str, Any]:
             },
             headers={"Content-Type": "application/x-www-form-urlencoded"},
         )
-        _raise_for_status(resp)
     data: dict[str, Any] = resp.json()
     tokens.access_token = data["access_token"]
     tokens.refresh_token = data.get("refresh_token", tokens.refresh_token)
@@ -274,7 +294,9 @@ async def exchange_org_code(code: str, state: str) -> dict[str, Any]:
         raise ValueError("OAuth state mismatch — possible CSRF.")
     validate_org_redirect_uri(settings.linkedin_org_redirect_uri)
     async with httpx.AsyncClient() as client:
-        resp = await client.post(
+        resp = await _retry_send(
+            client,
+            "POST",
             ACCESS_TOKEN_URL,
             data={
                 "grant_type": "authorization_code",
@@ -285,7 +307,6 @@ async def exchange_org_code(code: str, state: str) -> dict[str, Any]:
             },
             headers={"Content-Type": "application/x-www-form-urlencoded"},
         )
-        _raise_for_status(resp)
     data: dict[str, Any] = resp.json()
     org_tokens.access_token = data["access_token"]
     org_tokens.refresh_token = data.get("refresh_token", "")
@@ -299,7 +320,9 @@ async def refresh_org_access_token() -> dict[str, Any]:
     if not org_tokens.refresh_token:
         raise RuntimeError("No org refresh token available.")
     async with httpx.AsyncClient() as client:
-        resp = await client.post(
+        resp = await _retry_send(
+            client,
+            "POST",
             ACCESS_TOKEN_URL,
             data={
                 "grant_type": "refresh_token",
@@ -309,7 +332,6 @@ async def refresh_org_access_token() -> dict[str, Any]:
             },
             headers={"Content-Type": "application/x-www-form-urlencoded"},
         )
-        _raise_for_status(resp)
     data: dict[str, Any] = resp.json()
     org_tokens.access_token = data["access_token"]
     org_tokens.refresh_token = data.get("refresh_token", org_tokens.refresh_token)
@@ -341,8 +363,9 @@ def _org_auth_headers() -> dict[str, str]:
 async def get_profile() -> dict[str, Any]:
     """Fetch the authenticated member's profile (OpenID Connect userinfo)."""
     async with httpx.AsyncClient() as client:
-        resp = await client.get(f"{API_BASE}/userinfo", headers=_auth_headers())
-        _raise_for_status(resp)
+        resp = await _retry_send(
+            client, "GET", f"{API_BASE}/userinfo", headers=_auth_headers()
+        )
     result: dict[str, Any] = resp.json()
     return result
 
@@ -368,12 +391,13 @@ async def share_content(text: str, visibility: str = "PUBLIC") -> dict[str, Any]
         "visibility": {"com.linkedin.ugc.MemberNetworkVisibility": visibility},
     }
     async with httpx.AsyncClient() as client:
-        resp = await client.post(
+        resp = await _retry_send(
+            client,
+            "POST",
             f"{API_BASE}/ugcPosts",
             json=payload,
             headers=_auth_headers(),
         )
-        _raise_for_status(resp)
     # LinkedIn returns the created post URN in the X-RestLi-Id header; the
     # body may also carry an "id". Prefer the header, fall back to the body.
     body: dict[str, Any] = {}
@@ -494,12 +518,13 @@ async def list_organizations() -> dict[str, Any]:
         "projection": "(elements*(organization~(id,localizedName,vanityName,logoV2)))",
     }
     async with httpx.AsyncClient() as client:
-        resp = await client.get(
+        resp = await _retry_send(
+            client,
+            "GET",
             f"{API_BASE}/organizationAcls",
             params=params,
             headers=_org_auth_headers(),
         )
-        _raise_for_status(resp)
     data: dict[str, Any] = resp.json()
     companies: list[dict[str, Any]] = []
     for element in data.get("elements") or []:
@@ -520,12 +545,13 @@ async def get_organization(organization_id: str) -> dict[str, Any]:
     _require_org_scope()
     params = {"projection": "(id,localizedName,vanityName,logoV2)"}
     async with httpx.AsyncClient() as client:
-        resp = await client.get(
+        resp = await _retry_send(
+            client,
+            "GET",
             f"{API_BASE}/organizations/{organization_id}",
             params=params,
             headers=_org_auth_headers(),
         )
-        _raise_for_status(resp)
     org: dict[str, Any] = resp.json()
     return {
         "id": org.get("id"),
