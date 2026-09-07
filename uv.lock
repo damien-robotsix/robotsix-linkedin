@@ -422,8 +422,8 @@ wheels = [
 
 [[package]]
 name = "robotsix-config"
-version = "0.5.0"
-source = { git = "https://github.com/damien-robotsix/robotsix-config?rev=b68476fa9aab58f70697d870da956220ecf9cf48#b68476fa9aab58f70697d870da956220ecf9cf48" }
+version = "0.6.0"
+source = { git = "https://github.com/damien-robotsix/robotsix-config?rev=5b71513dc4fd8ea5ae004238ea679f77fb4b2ae7#5b71513dc4fd8ea5ae004238ea679f77fb4b2ae7" }
 dependencies = [
     { name = "pydantic" },
 ]
@@ -467,7 +467,7 @@ requires-dist = [
     { name = "pydantic", specifier = ">=2.7,<3" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8,<9" },
     { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.23,<1" },
-    { name = "robotsix-config", git = "https://github.com/damien-robotsix/robotsix-config?rev=b68476fa9aab58f70697d870da956220ecf9cf48" },
+    { name = "robotsix-config", git = "https://github.com/damien-robotsix/robotsix-config?rev=5b71513dc4fd8ea5ae004238ea679f77fb4b2ae7" },
     { name = "robotsix-http", git = "https://github.com/damien-robotsix/robotsix-http?rev=0dfb8eccd60942cdcb401d78f054e388a9c84a9b" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.4,<1" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.29,<1" },
