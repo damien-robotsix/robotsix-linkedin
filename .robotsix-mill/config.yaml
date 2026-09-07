@@ -1,2 +1,2 @@
 languages: [python]
-test_command: pytest
+test_command: uv run --extra dev pytest
