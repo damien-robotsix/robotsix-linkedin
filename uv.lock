@@ -431,7 +431,7 @@ dependencies = [
 [[package]]
 name = "robotsix-http"
 version = "0.3.3"
-source = { git = "https://github.com/damien-robotsix/robotsix-http?rev=0dfb8eccd60942cdcb401d78f054e388a9c84a9b#0dfb8eccd60942cdcb401d78f054e388a9c84a9b" }
+source = { git = "https://github.com/damien-robotsix/robotsix-http?rev=a742b30de389971c3be93820f088ab35b256e23f#a742b30de389971c3be93820f088ab35b256e23f" }
 dependencies = [
     { name = "httpx" },
 ]
@@ -468,7 +468,7 @@ requires-dist = [
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8,<9" },
     { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.23,<1" },
     { name = "robotsix-config", git = "https://github.com/damien-robotsix/robotsix-config?rev=b68476fa9aab58f70697d870da956220ecf9cf48" },
-    { name = "robotsix-http", git = "https://github.com/damien-robotsix/robotsix-http?rev=0dfb8eccd60942cdcb401d78f054e388a9c84a9b" },
+    { name = "robotsix-http", git = "https://github.com/damien-robotsix/robotsix-http?rev=a742b30de389971c3be93820f088ab35b256e23f" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.4,<1" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.29,<1" },
 ]
