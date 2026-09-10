@@ -7,11 +7,17 @@ from typing import Any, NoReturn
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import PlainTextResponse, RedirectResponse
-from pydantic import BaseModel
-from robotsix_config import dump_config
+from pydantic import BaseModel, Field
+from robotsix_config import (
+    InvalidConfigError,
+    apply_update,
+    load_config,
+    read_versions,
+    rollback,
+)
 
 from . import auth
-from .config import config_schema_json, settings
+from .config import Settings, config_schema_json, settings
 
 app = FastAPI(
     title="robotsix-linkedin",
@@ -67,20 +73,57 @@ async def get_config() -> dict[str, Any]:
 class _ConfigUpdate(BaseModel):
     """Partial config update — only supplied fields are changed."""
 
-    linkedin_client_id: str | None = None
-    linkedin_client_secret: str | None = None
-    linkedin_redirect_uri: str | None = None
-    linkedin_allowed_redirect_uris: str | None = None
-    linkedin_scopes: str | None = None
-    linkedin_token_file: str | None = None
-    linkedin_org_client_id: str | None = None
-    linkedin_org_client_secret: str | None = None
-    linkedin_org_redirect_uri: str | None = None
-    linkedin_org_scopes: str | None = None
-    linkedin_org_token_file: str | None = None
-    host: str | None = None
-    port: int | None = None
-    require_operator_confirmation: bool | None = None
+    linkedin_client_id: str | None = Field(
+        default=None, description="LinkedIn app client ID (secret)."
+    )
+    linkedin_client_secret: str | None = Field(
+        default=None, description="LinkedIn app client secret (secret)."
+    )
+    linkedin_redirect_uri: str | None = Field(
+        default=None, description="OAuth redirect URI."
+    )
+    linkedin_allowed_redirect_uris: str | None = Field(
+        default=None,
+        description="Space- or comma-separated extra redirect URIs.",
+    )
+    linkedin_scopes: str | None = Field(
+        default=None, description="Space-separated scope list."
+    )
+    linkedin_token_file: str | None = Field(
+        default=None, description="Token persistence path (outside the repo)."
+    )
+    linkedin_org_client_id: str | None = Field(
+        default=None, description="Dedicated org-app client ID (secret)."
+    )
+    linkedin_org_client_secret: str | None = Field(
+        default=None, description="Dedicated org-app client secret (secret)."
+    )
+    linkedin_org_redirect_uri: str | None = Field(
+        default=None, description="Org-app OAuth redirect URI."
+    )
+    linkedin_org_scopes: str | None = Field(
+        default=None, description="Org-app scope list."
+    )
+    linkedin_org_token_file: str | None = Field(
+        default=None, description="Org token persistence path (outside the repo)."
+    )
+    host: str | None = Field(default=None, description="Bind host.")
+    port: int | None = Field(default=None, description="Bind port.")
+    require_operator_confirmation: bool | None = Field(
+        default=None, description="Require confirmation for writes."
+    )
+
+
+def _refresh_settings() -> None:
+    """Reload the live ``settings`` singleton from the config file in place.
+
+    ``auth.py`` and other modules imported ``settings`` by reference, so an
+    in-place copy of the freshly loaded values makes a persisted change
+    visible to them without a reload.
+    """
+    fresh = load_config(Settings)
+    for name in Settings.model_fields:
+        setattr(settings, name, getattr(fresh, name))
 
 
 @app.put("/config", tags=["config"])
@@ -88,31 +131,47 @@ async def put_config(body: _ConfigUpdate) -> dict[str, Any]:
     """Update configuration and persist to the config file.
 
     Only fields present in the request body are changed; omitted fields
-    keep their current values. Secret fields accept plain strings.
+    keep their current values. Secret fields accept plain strings; a masked
+    or empty value leaves the stored secret unchanged. Each write records a
+    new config version.
     """
     updates = body.model_dump(exclude_none=True)
+    try:
+        _merged, changed_keys, version = apply_update(Settings, updates)
+    except InvalidConfigError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    _refresh_settings()
+    return {"status": "ok", "version": version, "changed_keys": changed_keys}
 
-    # Convert plain-string secret fields to SecretStr.
-    for key in (
-        "linkedin_client_id",
-        "linkedin_client_secret",
-        "linkedin_org_client_id",
-        "linkedin_org_client_secret",
-    ):
-        if key in updates:
-            from pydantic import SecretStr
 
-            updates[key] = SecretStr(updates[key])
+@app.get("/config/versions", tags=["config"])
+async def get_config_versions() -> dict[str, Any]:
+    """Return the recorded config version history, newest first."""
+    versions = read_versions()
+    versions.reverse()  # read_versions returns oldest-first.
+    return {"versions": versions}
 
-    # Apply updates to the live settings object in-place so every module
-    # that imported ``settings`` sees the change immediately.
-    for key, value in updates.items():
-        setattr(settings, key, value)
 
-    # Persist to the config file.
-    dump_config(settings)
+class _RollbackRequest(BaseModel):
+    """Rollback request — the config version to restore."""
 
-    return {"status": "ok"}
+    version: int = Field(description="Config version to restore as a new version.")
+
+
+@app.post("/config/rollback", tags=["config"])
+async def rollback_config(body: _RollbackRequest) -> dict[str, Any]:
+    """Restore an earlier config version as a new version.
+
+    The history is append-only: rolling back writes a new entry whose values
+    match the target version. Secrets are carried forward from the live
+    config, never restored from history.
+    """
+    try:
+        _restored, changed_keys, version = rollback(Settings, body.version)
+    except InvalidConfigError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    _refresh_settings()
+    return {"status": "ok", "version": version, "changed_keys": changed_keys}
 
 
 @app.get("/config/schema", tags=["config"])
