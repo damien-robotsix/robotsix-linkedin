@@ -422,16 +422,16 @@ wheels = [
 
 [[package]]
 name = "robotsix-config"
-version = "0.5.0"
-source = { git = "https://github.com/damien-robotsix/robotsix-config?rev=b68476fa9aab58f70697d870da956220ecf9cf48#b68476fa9aab58f70697d870da956220ecf9cf48" }
+version = "0.7.0"
+source = { git = "https://github.com/damien-robotsix/robotsix-config?rev=0f2e484b59eb306b54ba25fc8bddb5a3e3ad2535#0f2e484b59eb306b54ba25fc8bddb5a3e3ad2535" }
 dependencies = [
     { name = "pydantic" },
 ]
 
 [[package]]
 name = "robotsix-http"
-version = "0.3.3"
-source = { git = "https://github.com/damien-robotsix/robotsix-http?rev=0dfb8eccd60942cdcb401d78f054e388a9c84a9b#0dfb8eccd60942cdcb401d78f054e388a9c84a9b" }
+version = "0.4.0"
+source = { git = "https://github.com/damien-robotsix/robotsix-http?rev=d216db8d11472045509ea5312b498053f5562d06#d216db8d11472045509ea5312b498053f5562d06" }
 dependencies = [
     { name = "httpx" },
 ]
@@ -467,8 +467,8 @@ requires-dist = [
     { name = "pydantic", specifier = ">=2.7,<3" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8,<9" },
     { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.23,<1" },
-    { name = "robotsix-config", git = "https://github.com/damien-robotsix/robotsix-config?rev=b68476fa9aab58f70697d870da956220ecf9cf48" },
-    { name = "robotsix-http", git = "https://github.com/damien-robotsix/robotsix-http?rev=0dfb8eccd60942cdcb401d78f054e388a9c84a9b" },
+    { name = "robotsix-config", git = "https://github.com/damien-robotsix/robotsix-config?rev=0f2e484b59eb306b54ba25fc8bddb5a3e3ad2535" },
+    { name = "robotsix-http", git = "https://github.com/damien-robotsix/robotsix-http?rev=d216db8d11472045509ea5312b498053f5562d06" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.4,<1" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.29,<1" },
 ]
