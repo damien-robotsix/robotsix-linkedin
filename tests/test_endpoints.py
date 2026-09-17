@@ -29,6 +29,15 @@ async def test_chat_skill_returns_200_markdown(client):
     assert "name: robotsix-linkedin" in resp.text
 
 
+def test_chat_skill_route_parity():
+    """The chat-skill descriptor documents exactly the app's real routes."""
+    from robotsix_http.fastapi import assert_chat_skill_route_parity
+
+    from linkedin_service.app import CHAT_SKILL_PATH, app
+
+    assert_chat_skill_route_parity(app, CHAT_SKILL_PATH.read_text(encoding="utf-8"))
+
+
 @pytest.mark.asyncio
 async def test_org_login_without_org_credentials_returns_503(client):
     """Without the dedicated org app, /auth/org/login returns 503."""

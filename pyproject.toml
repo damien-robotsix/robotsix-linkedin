@@ -13,7 +13,7 @@ dependencies = [
     "httpx>=0.27,<1",
     "pydantic>=2.7,<3",
     "robotsix-config>=0.1,<1",
-    "robotsix-http>=0.3,<1",
+    "robotsix-http[fastapi]>=0.4,<1",
 ]
 
 [project.optional-dependencies]
@@ -27,7 +27,7 @@ dev = [
 
 [tool.uv.sources]
 robotsix-config = { git = "https://github.com/damien-robotsix/robotsix-config", rev = "b68476fa9aab58f70697d870da956220ecf9cf48" }
-robotsix-http = { git = "https://github.com/damien-robotsix/robotsix-http", rev = "0dfb8eccd60942cdcb401d78f054e388a9c84a9b" }
+robotsix-http = { git = "https://github.com/damien-robotsix/robotsix-http", rev = "7557325f0cd08e47124b588710da011951feb421" }
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/linkedin_service"]

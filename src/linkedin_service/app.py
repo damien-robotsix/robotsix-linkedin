@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from pathlib import Path
+from importlib.resources import files
 from typing import Any, NoReturn
 
 from fastapi import FastAPI, HTTPException, Query
-from fastapi.responses import PlainTextResponse, RedirectResponse
+from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field
 from robotsix_config import (
     InvalidConfigError,
@@ -15,6 +15,7 @@ from robotsix_config import (
     read_versions,
     rollback,
 )
+from robotsix_http.fastapi import create_chat_skill_router
 
 from . import auth
 from .config import Settings, config_schema_json, settings
@@ -43,20 +44,18 @@ async def health() -> dict[str, Any]:
 # Chat skill
 # ---------------------------------------------------------------------------
 
-CHAT_SKILL_PATH = Path("chat-skill.md")
+CHAT_SKILL_PATH = files(__package__).joinpath("chat-skill.md")
 
-
-@app.get("/chat-skill", tags=["infra"])
-async def chat_skill() -> PlainTextResponse:
-    """Return the SKILL.md document describing this service to chat agents."""
-    try:
-        content = CHAT_SKILL_PATH.read_text(encoding="utf-8")
-    except OSError as exc:
-        raise HTTPException(
-            status_code=500,
-            detail=f"chat-skill.md not found: {exc}",
-        ) from exc
-    return PlainTextResponse(content, media_type="text/markdown")
+# Mount the shared chat-skill route factory (serves the descriptor as
+# text/markdown). The frontmatter is validated eagerly at import time and the
+# component id is asserted to match, so a malformed or misnamed descriptor
+# fails fast rather than on first request.
+app.include_router(
+    create_chat_skill_router(
+        CHAT_SKILL_PATH.read_text(encoding="utf-8"),
+        name="robotsix-linkedin",
+    )
+)
 
 
 # ---------------------------------------------------------------------------
@@ -79,16 +78,12 @@ class _ConfigUpdate(BaseModel):
     linkedin_client_secret: str | None = Field(
         default=None, description="LinkedIn app client secret (secret)."
     )
-    linkedin_redirect_uri: str | None = Field(
-        default=None, description="OAuth redirect URI."
-    )
+    linkedin_redirect_uri: str | None = Field(default=None, description="OAuth redirect URI.")
     linkedin_allowed_redirect_uris: str | None = Field(
         default=None,
         description="Space- or comma-separated extra redirect URIs.",
     )
-    linkedin_scopes: str | None = Field(
-        default=None, description="Space-separated scope list."
-    )
+    linkedin_scopes: str | None = Field(default=None, description="Space-separated scope list.")
     linkedin_token_file: str | None = Field(
         default=None, description="Token persistence path (outside the repo)."
     )
@@ -101,9 +96,7 @@ class _ConfigUpdate(BaseModel):
     linkedin_org_redirect_uri: str | None = Field(
         default=None, description="Org-app OAuth redirect URI."
     )
-    linkedin_org_scopes: str | None = Field(
-        default=None, description="Org-app scope list."
-    )
+    linkedin_org_scopes: str | None = Field(default=None, description="Org-app scope list.")
     linkedin_org_token_file: str | None = Field(
         default=None, description="Org token persistence path (outside the repo)."
     )
@@ -247,9 +240,7 @@ async def org_auth_login() -> RedirectResponse:
 
 
 @app.get("/auth/org/callback", tags=["auth"])
-async def org_auth_callback(
-    code: str = Query(...), state: str = Query(...)
-) -> dict[str, Any]:
+async def org_auth_callback(code: str = Query(...), state: str = Query(...)) -> dict[str, Any]:
     """Handle the org app's OAuth redirect — exchange code for org tokens."""
     try:
         token_data = await auth.exchange_org_code(code, state)

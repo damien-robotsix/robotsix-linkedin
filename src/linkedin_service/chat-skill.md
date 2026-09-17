@@ -20,6 +20,27 @@ clobber each other:
 
 ## Endpoints
 
+The complete set of routes this service exposes (kept in sync with the app by
+`assert_chat_skill_route_parity`):
+
+```
+GET  /health
+GET  /chat-skill
+GET  /config
+PUT  /config
+GET  /config/versions
+POST /config/rollback
+GET  /config/schema
+GET  /auth/login
+GET  /auth/callback
+GET  /auth/org/login
+GET  /auth/org/callback
+GET  /me
+GET  /organizations
+GET  /organizations/{organization_id}
+POST /share
+```
+
 ### Infra
 
 | Method | Path      | Description          | Auth required |
@@ -30,9 +51,11 @@ clobber each other:
 
 | Method | Path             | Description                                      | Auth required |
 |--------|------------------|--------------------------------------------------|---------------|
-| GET    | `/config`        | Current configuration (secrets masked)           | No            |
-| PUT    | `/config`        | Update configuration and persist to config file  | No            |
-| GET    | `/config/schema` | JSON Schema for the configuration model          | No            |
+| GET    | `/config`          | Current configuration (secrets masked)           | No            |
+| PUT    | `/config`          | Update configuration and persist to config file  | No            |
+| GET    | `/config/versions` | Recorded config version history, newest first    | No            |
+| POST   | `/config/rollback` | Restore an earlier config version as a new one   | No            |
+| GET    | `/config/schema`   | JSON Schema for the configuration model           | No            |
 
 ### Auth (OAuth 2.0 — 3-legged)
 
