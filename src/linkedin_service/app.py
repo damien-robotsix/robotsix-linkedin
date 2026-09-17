@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from pathlib import Path
+from importlib.resources import files
 from typing import Any, NoReturn
 
 from fastapi import FastAPI, HTTPException, Query
@@ -44,7 +44,7 @@ async def health() -> dict[str, Any]:
 # Chat skill
 # ---------------------------------------------------------------------------
 
-CHAT_SKILL_PATH = Path(__file__).resolve().parents[2] / "chat-skill.md"
+CHAT_SKILL_PATH = files(__package__).joinpath("chat-skill.md")
 
 # Mount the shared chat-skill route factory (serves the descriptor as
 # text/markdown). The frontmatter is validated eagerly at import time and the
