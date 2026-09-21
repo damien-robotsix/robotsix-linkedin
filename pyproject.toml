@@ -26,8 +26,8 @@ dev = [
 ]
 
 [tool.uv.sources]
-robotsix-config = { git = "https://github.com/damien-robotsix/robotsix-config", rev = "b68476fa9aab58f70697d870da956220ecf9cf48" }
-robotsix-http = { git = "https://github.com/damien-robotsix/robotsix-http", rev = "7557325f0cd08e47124b588710da011951feb421" }
+robotsix-config = { git = "https://github.com/damien-robotsix/robotsix-config", rev = "78b3499cf3bc52b074a3b1d01d802241c8571df3" }
+robotsix-http = { git = "https://github.com/damien-robotsix/robotsix-http", rev = "37700147b94207e51f805b592b4bb1674d524254" }
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/linkedin_service"]
