@@ -24,7 +24,10 @@ jobs:
         run: pip install "robotsix-config @ git+https://github.com/damien-robotsix/robotsix-config@b68476fa9aab58f70697d870da956220ecf9cf48"
 
       - name: Install robotsix-http from GitHub
-        run: pip install "robotsix-http[fastapi] @ git+https://github.com/damien-robotsix/robotsix-http@7557325f0cd08e47124b588710da011951feb421"
+        run: pip install "robotsix-http[fastapi] @ git+https://github.com/damien-robotsix/robotsix-http@4bf6c1e317ccdf4f2e2764ad05c97a456b1ca0a1"
+
+      - name: Install robotsix-llmio from GitHub
+        run: pip install "robotsix-llmio @ git+https://github.com/damien-robotsix/robotsix-llmio@e31d639b9a392c70516a74d81efbaf5b02e1b04b"
 
       - name: Install dependencies
         run: pip install ".[dev]"
