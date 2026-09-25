@@ -9,6 +9,7 @@ COPY src/ src/
 RUN apt-get update && apt-get install -y --no-install-recommends git \
     && pip install --no-cache-dir "robotsix-config @ git+https://github.com/damien-robotsix/robotsix-config@b68476fa9aab58f70697d870da956220ecf9cf48" \
     && pip install --no-cache-dir "robotsix-http[fastapi] @ git+https://github.com/damien-robotsix/robotsix-http@7557325f0cd08e47124b588710da011951feb421" \
+    && pip install --no-cache-dir "robotsix-llmio @ git+https://github.com/damien-robotsix/robotsix-llmio@e31d639b9a392c70516a74d81efbaf5b02e1b04b" \
     && pip install --no-cache-dir . \
     && apt-get purge -y git && apt-get autoremove -y && rm -rf /var/lib/apt/lists/*
 
