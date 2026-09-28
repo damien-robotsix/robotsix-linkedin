@@ -675,7 +675,7 @@ requires-dist = [
     { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.23,<1" },
     { name = "robotsix-config", git = "https://github.com/damien-robotsix/robotsix-config?rev=b68476fa9aab58f70697d870da956220ecf9cf48" },
     { name = "robotsix-http", extras = ["fastapi"], git = "https://github.com/damien-robotsix/robotsix-http?rev=4bf6c1e317ccdf4f2e2764ad05c97a456b1ca0a1" },
-    { name = "robotsix-llmio", git = "https://github.com/damien-robotsix/robotsix-llmio?rev=e31d639b9a392c70516a74d81efbaf5b02e1b04b" },
+    { name = "robotsix-llmio", git = "https://github.com/damien-robotsix/robotsix-llmio?rev=991a9273a80a7e69067817c70228157ac761a7f0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.4,<1" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.29,<1" },
 ]
@@ -684,7 +684,7 @@ provides-extras = ["dev"]
 [[package]]
 name = "robotsix-llmio"
 version = "0.7.6"
-source = { git = "https://github.com/damien-robotsix/robotsix-llmio?rev=e31d639b9a392c70516a74d81efbaf5b02e1b04b#e31d639b9a392c70516a74d81efbaf5b02e1b04b" }
+source = { git = "https://github.com/damien-robotsix/robotsix-llmio?rev=991a9273a80a7e69067817c70228157ac761a7f0#991a9273a80a7e69067817c70228157ac761a7f0" }
 dependencies = [
     { name = "anyio" },
     { name = "httpx" },
