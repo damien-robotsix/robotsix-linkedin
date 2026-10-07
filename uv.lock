@@ -6,6 +6,9 @@ resolution-markers = [
     "python_full_version < '3.15'",
 ]
 
+[manifest]
+overrides = [{ name = "robotsix-http", git = "https://github.com/damien-robotsix/robotsix-http?rev=952d984b1d228efcc880bca9f7d6b00e14eb3eed" }]
+
 [[package]]
 name = "annotated-doc"
 version = "0.0.5"
@@ -629,16 +632,11 @@ dependencies = [
 
 [[package]]
 name = "robotsix-http"
-version = "0.6.0"
-source = { git = "https://github.com/damien-robotsix/robotsix-http.git?rev=4bf6c1e317ccdf4f2e2764ad05c97a456b1ca0a1#4bf6c1e317ccdf4f2e2764ad05c97a456b1ca0a1" }
+version = "0.7.1"
+source = { git = "https://github.com/damien-robotsix/robotsix-http?rev=952d984b1d228efcc880bca9f7d6b00e14eb3eed#952d984b1d228efcc880bca9f7d6b00e14eb3eed" }
 dependencies = [
     { name = "httpcore" },
     { name = "httpx" },
-]
-
-[package.optional-dependencies]
-fastapi = [
-    { name = "fastapi" },
 ]
 
 [[package]]
@@ -650,7 +648,7 @@ dependencies = [
     { name = "httpx" },
     { name = "pydantic" },
     { name = "robotsix-config" },
-    { name = "robotsix-http", extra = ["fastapi"] },
+    { name = "robotsix-http" },
     { name = "robotsix-llmio" },
     { name = "uvicorn", extra = ["standard"] },
 ]
@@ -674,7 +672,7 @@ requires-dist = [
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8,<9" },
     { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.23,<1" },
     { name = "robotsix-config", git = "https://github.com/damien-robotsix/robotsix-config?rev=b68476fa9aab58f70697d870da956220ecf9cf48" },
-    { name = "robotsix-http", extras = ["fastapi"], git = "https://github.com/damien-robotsix/robotsix-http?rev=4bf6c1e317ccdf4f2e2764ad05c97a456b1ca0a1" },
+    { name = "robotsix-http", extras = ["fastapi"], git = "https://github.com/damien-robotsix/robotsix-http?rev=952d984b1d228efcc880bca9f7d6b00e14eb3eed" },
     { name = "robotsix-llmio", git = "https://github.com/damien-robotsix/robotsix-llmio?rev=e31d639b9a392c70516a74d81efbaf5b02e1b04b" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.4,<1" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.29,<1" },

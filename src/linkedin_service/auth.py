@@ -7,7 +7,6 @@ endpoints so the service still boots and /health passes.
 from __future__ import annotations
 
 import json
-import os
 import secrets
 import time
 import urllib.parse
@@ -17,6 +16,7 @@ from typing import Any
 
 import httpx
 from robotsix_http import ExternalHTTPError, RetryClient
+from robotsix_http.oauth import SecureTokenStore
 
 from .config import settings
 
@@ -62,6 +62,19 @@ async def _retry_send(
         raise LinkedInAPIError(exc.response.status_code, exc.response.text) from exc
 
 
+def _secure_store(path: str | None) -> SecureTokenStore[dict[str, Any]]:
+    """Return the shared secure on-disk store for a persisted-token dict.
+
+    Delegates the 0700-directory / 0600-file security posture, the
+    empty-path-disables-persistence contract, and the missing/corrupt-file
+    silent no-op to ``robotsix_http.oauth`` (the fleet-shared helpers), with
+    the LinkedIn-specific JSON (de)serialization layered on top. ``~`` in the
+    configured path is expanded so operator home-relative paths keep working.
+    """
+    expanded = str(Path(path).expanduser()) if path else path
+    return SecureTokenStore(path=expanded, dumps=json.dumps, loads=json.loads)
+
+
 @dataclass
 class TokenStore:
     """Token storage backed by an on-disk file outside the repo.
@@ -91,36 +104,25 @@ class TokenStore:
     def save(self, path: str | None = None) -> None:
         """Persist tokens to disk (0600 file inside a 0700 directory).
 
-        No-op when no token file is configured. Token values are never
-        written to logs.
+        No-op when no token file is configured. The on-disk security
+        posture (0700 directory, 0600 file, empty-path-disables contract)
+        is owned by :class:`robotsix_http.oauth.SecureTokenStore`; this
+        store only layers the LinkedIn-specific JSON serialization on top.
+        Token values are never written to logs.
         """
         target = path if path is not None else settings.linkedin_token_file
-        if not target:
-            return
-        file_path = Path(target).expanduser()
-        parent = file_path.parent
-        parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-        os.chmod(parent, 0o700)
-        fd = os.open(
-            str(file_path),
-            os.O_WRONLY | os.O_CREAT | os.O_TRUNC,
-            0o600,
-        )
-        with os.fdopen(fd, "w", encoding="utf-8") as fh:
-            json.dump(self._persisted_dict(), fh)
-        os.chmod(file_path, 0o600)
+        _secure_store(target).save(self._persisted_dict())
 
     def load(self, path: str | None = None) -> None:
-        """Load persisted tokens on startup. No-op when the file is absent."""
+        """Load persisted tokens on startup. No-op when the file is absent.
+
+        A missing or corrupt on-disk payload degrades to a cold start
+        (fields left untouched) rather than raising, courtesy of
+        :class:`robotsix_http.oauth.SecureTokenStore`.
+        """
         target = path if path is not None else settings.linkedin_token_file
-        if not target:
-            return
-        file_path = Path(target).expanduser()
-        if not file_path.exists():
-            return
-        try:
-            data = json.loads(file_path.read_text(encoding="utf-8"))
-        except (ValueError, OSError):
+        data = _secure_store(target).load()
+        if data is None:
             return
         self.access_token = data.get("access_token", "")
         self.refresh_token = data.get("refresh_token", "")
@@ -363,9 +365,7 @@ def _org_auth_headers() -> dict[str, str]:
 async def get_profile() -> dict[str, Any]:
     """Fetch the authenticated member's profile (OpenID Connect userinfo)."""
     async with httpx.AsyncClient() as client:
-        resp = await _retry_send(
-            client, "GET", f"{API_BASE}/userinfo", headers=_auth_headers()
-        )
+        resp = await _retry_send(client, "GET", f"{API_BASE}/userinfo", headers=_auth_headers())
     result: dict[str, Any] = resp.json()
     return result
 
