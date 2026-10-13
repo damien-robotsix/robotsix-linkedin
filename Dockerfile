@@ -1,17 +1,37 @@
-FROM python:3.14-slim AS base
+# syntax=docker/dockerfile:1
+
+# ---- builder: resolve the venv from uv.lock (single source of truth) ----
+FROM ghcr.io/astral-sh/uv:python3.14-trixie-slim AS builder
+
+ENV UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy \
+    UV_PYTHON_DOWNLOADS=never
 
 WORKDIR /app
 
-# Install dependencies first (layer cache)
-COPY pyproject.toml ./
-COPY src/ src/
-
+# git is needed to fetch the robotsix-* git dependencies pinned in uv.lock.
 RUN apt-get update && apt-get install -y --no-install-recommends git \
-    && pip install --no-cache-dir "robotsix-config @ git+https://github.com/damien-robotsix/robotsix-config@b68476fa9aab58f70697d870da956220ecf9cf48" \
-    && pip install --no-cache-dir "robotsix-http[fastapi] @ git+https://github.com/damien-robotsix/robotsix-http@952d984b1d228efcc880bca9f7d6b00e14eb3eed" \
-    && pip install --no-cache-dir "robotsix-llmio @ git+https://github.com/damien-robotsix/robotsix-llmio@e31d639b9a392c70516a74d81efbaf5b02e1b04b" \
-    && pip install --no-cache-dir . \
-    && apt-get purge -y git && apt-get autoremove -y && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/*
+
+# Install dependencies first (layer cache); the lockfile is authoritative.
+COPY pyproject.toml uv.lock ./
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --frozen --no-dev --no-editable --no-install-project
+
+# Then install the project itself against the same locked graph.
+COPY src/ src/
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --frozen --no-dev --no-editable
+
+# ---- runtime: ship only the resolved venv ----
+FROM python:3.14-slim AS runtime
+
+WORKDIR /app
+
+COPY --from=builder /app/.venv /app/.venv
+
+ENV PATH="/app/.venv/bin:$PATH" \
+    UV_PYTHON_DOWNLOADS=never
 
 EXPOSE 8000
 
