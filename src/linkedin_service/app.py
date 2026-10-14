@@ -15,7 +15,7 @@ from robotsix_config import (
     read_versions,
     rollback,
 )
-from robotsix_http.fastapi import create_chat_skill_router
+from robotsix_http.fastapi import create_chat_skill_router, register_exception_handlers
 
 from . import auth
 from .config import Settings, config_schema_json, settings
@@ -27,6 +27,11 @@ app = FastAPI(
         "LinkedIn API service for fleet agents — OAuth 2.0 auth, reads, operator-gated writes."
     ),
 )
+
+# Wire the shared exception-handler suite so every error response (including
+# the ``HTTPException``s raised throughout this module) is rendered into the
+# canonical ``{"error": {"code", "detail"}}`` envelope.
+register_exception_handlers(app)
 
 
 # ---------------------------------------------------------------------------

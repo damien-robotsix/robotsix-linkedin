@@ -176,6 +176,21 @@ troubleshooting.
 | PUT    | `/config`       | Update configuration and persist       | No            |
 | GET    | `/config/schema`| JSON Schema for the config model       | No            |
 
+### Error Response Format
+
+All error responses use a shared envelope format:
+
+```json
+{
+  "error": {
+    "code": "http_error",
+    "detail": "Human-readable error description"
+  }
+}
+```
+
+The `code` field classifies the error type, and `detail` provides context for debugging or user display.
+
 ### `GET /chat-skill`
 
 Returns the service's SKILL.md document (YAML frontmatter + overview, endpoints,
@@ -185,6 +200,18 @@ learn how to drive the service. Always returns 200.
 ### `GET /health`
 
 Liveness probe. Always returns 200.
+
+**Response:**
+
+```json
+{
+  "status": "ok",
+  "auth_configured": true
+}
+```
+
+- `status` — service status ("ok")
+- `auth_configured` — whether LinkedIn credentials are configured. Operators may monitor this field to detect misconfigured deployments.
 
 ### `GET /auth/login`
 
