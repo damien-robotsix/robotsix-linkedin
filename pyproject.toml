@@ -39,9 +39,9 @@ override-dependencies = [
 ]
 
 [tool.uv.sources]
-robotsix-config = { git = "https://github.com/damien-robotsix/robotsix-config", rev = "b68476fa9aab58f70697d870da956220ecf9cf48" }
-robotsix-http = { git = "https://github.com/damien-robotsix/robotsix-http", rev = "952d984b1d228efcc880bca9f7d6b00e14eb3eed" }
-robotsix-llmio = { git = "https://github.com/damien-robotsix/robotsix-llmio", rev = "e31d639b9a392c70516a74d81efbaf5b02e1b04b" }
+robotsix-config = { git = "https://github.com/damien-robotsix/robotsix-config", rev = "85cdb64ff946678cd72d4e1299962357d5baeccd" }
+robotsix-http = { git = "https://github.com/damien-robotsix/robotsix-http", rev = "4c804a9f839b4ae28f8c7e07a9ab031d59ed36cb" }
+robotsix-llmio = { git = "https://github.com/damien-robotsix/robotsix-llmio", rev = "d10ce1479ab4f96d07f23d554f0b4ae68a63bb49" }
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/linkedin_service"]
