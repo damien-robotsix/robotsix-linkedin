@@ -193,14 +193,27 @@ def build_authorize_url() -> str:
     return f"{AUTHORIZE_URL}?{urllib.parse.urlencode(params)}"
 
 
+def _consume_state(store: TokenStore, state: str) -> None:
+    """Validate and burn the one-time OAuth ``state`` nonce held by ``store``.
+
+    Rejects when no login flow is pending (empty stored state) so an
+    attacker cannot pass ``state=`` before ``/auth/login`` was ever called
+    (login-CSRF), compares in constant time, and clears the nonce once the
+    check passes so it cannot be replayed.
+    """
+    expected = store.state
+    if not expected or not secrets.compare_digest(state.encode("utf-8"), expected.encode("utf-8")):
+        raise ValueError("OAuth state mismatch — possible CSRF.")
+    store.state = ""
+
+
 async def exchange_code(code: str, state: str) -> dict[str, Any]:
     """Exchange an authorization code for access + refresh tokens.
 
     Returns the token response dict.  Raises on mismatched state or
     HTTP error.
     """
-    if state != tokens.state:
-        raise ValueError("OAuth state mismatch — possible CSRF.")
+    _consume_state(tokens, state)
     validate_redirect_uri(settings.linkedin_redirect_uri)
     async with httpx.AsyncClient() as client:
         resp = await _retry_send(
@@ -292,8 +305,7 @@ async def exchange_org_code(code: str, state: str) -> dict[str, Any]:
     Tokens land in ``org_tokens`` (never ``tokens``). Raises on mismatched
     state or HTTP error.
     """
-    if state != org_tokens.state:
-        raise ValueError("OAuth state mismatch — possible CSRF.")
+    _consume_state(org_tokens, state)
     validate_org_redirect_uri(settings.linkedin_org_redirect_uri)
     async with httpx.AsyncClient() as client:
         resp = await _retry_send(

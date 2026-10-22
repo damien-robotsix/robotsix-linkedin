@@ -144,6 +144,34 @@ async def test_exchange_code_state_mismatch_raises() -> None:
 
 
 @pytest.mark.asyncio
+async def test_exchange_code_rejects_empty_state_without_login(
+    monkeypatch: pytest.MonkeyPatch, _credentials: None
+) -> None:
+    """Login-CSRF: ``state=`` must not match the default empty stored state."""
+    client = _patch_client(monkeypatch, _FakeResponse(json_data={"access_token": "x"}))
+    auth.tokens.state = ""
+    with pytest.raises(ValueError, match="state mismatch"):
+        await auth.exchange_code("attacker-code", "")
+    assert client.calls == []
+    assert auth.tokens.access_token == ""
+
+
+@pytest.mark.asyncio
+async def test_exchange_code_state_cannot_be_replayed(
+    monkeypatch: pytest.MonkeyPatch, _credentials: None
+) -> None:
+    _patch_client(
+        monkeypatch,
+        _FakeResponse(json_data={"access_token": "abc", "refresh_token": "r", "expires_in": 60}),
+    )
+    auth.tokens.state = "once"
+    await auth.exchange_code("code-1", "once")
+    assert auth.tokens.state == ""
+    with pytest.raises(ValueError, match="state mismatch"):
+        await auth.exchange_code("code-2", "once")
+
+
+@pytest.mark.asyncio
 async def test_exchange_code_surfaces_api_error(
     monkeypatch: pytest.MonkeyPatch, _credentials: None
 ) -> None:
@@ -271,9 +299,7 @@ async def test_share_content_not_retried_on_5xx(monkeypatch: pytest.MonkeyPatch)
 
     monkeypatch.setattr("asyncio.sleep", _no_sleep)
     monkeypatch.setattr(auth, "get_profile", fake_profile)
-    client = _SequenceClient(
-        [_FakeResponse(json_data=None, status_code=503, text="unavailable")]
-    )
+    client = _SequenceClient([_FakeResponse(json_data=None, status_code=503, text="unavailable")])
     monkeypatch.setattr(auth.httpx, "AsyncClient", lambda *a, **k: client)
     auth.tokens.access_token = "token"
 
@@ -349,6 +375,33 @@ async def test_exchange_org_code_state_mismatch_raises() -> None:
     auth.org_tokens.state = "expected"
     with pytest.raises(ValueError, match="state mismatch"):
         await auth.exchange_org_code("code", "tampered")
+
+
+@pytest.mark.asyncio
+async def test_exchange_org_code_rejects_empty_state_without_login(
+    monkeypatch: pytest.MonkeyPatch, _org_credentials: None
+) -> None:
+    client = _patch_client(monkeypatch, _FakeResponse(json_data={"access_token": "x"}))
+    auth.org_tokens.state = ""
+    with pytest.raises(ValueError, match="state mismatch"):
+        await auth.exchange_org_code("attacker-code", "")
+    assert client.calls == []
+    assert auth.org_tokens.access_token == ""
+
+
+@pytest.mark.asyncio
+async def test_exchange_org_code_state_cannot_be_replayed(
+    monkeypatch: pytest.MonkeyPatch, _org_credentials: None
+) -> None:
+    _patch_client(
+        monkeypatch,
+        _FakeResponse(json_data={"access_token": "abc", "refresh_token": "r", "expires_in": 60}),
+    )
+    auth.org_tokens.state = "org-once"
+    await auth.exchange_org_code("code-1", "org-once")
+    assert auth.org_tokens.state == ""
+    with pytest.raises(ValueError, match="state mismatch"):
+        await auth.exchange_org_code("code-2", "org-once")
 
 
 # ---------------------------------------------------------------------------
@@ -444,9 +497,7 @@ async def test_get_organization_returns_company(
             "vanityName": "robotsix",
             "logoV2": {
                 "original": "urn:li:digitalmediaAsset:C5600AQAbc",
-                "original~": {
-                    "elements": [{"url": "https://cdn.example/logo.png"}]
-                },
+                "original~": {"elements": [{"url": "https://cdn.example/logo.png"}]},
             },
         }
     )
