@@ -113,4 +113,3 @@ jobs:
       run-zizmor: true
     permissions:
       contents: read
-      packages: write
