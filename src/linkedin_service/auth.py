@@ -10,6 +10,7 @@ import json
 import secrets
 import time
 import urllib.parse
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -162,35 +163,107 @@ def consume_confirmation_token(token: str) -> dict[str, Any] | None:
 # ---------------------------------------------------------------------------
 
 
-def validate_redirect_uri(uri: str) -> None:
-    """Ensure ``uri`` is on the configured allowlist.
+@dataclass(frozen=True)
+class OAuthApp:
+    """One LinkedIn OAuth app (personal or org) and the token store it owns.
 
-    Raises :class:`ValueError` when the redirect URI is not permitted,
-    guarding against open-redirect / token-exfiltration attacks.
+    Settings-backed fields are zero-arg callables evaluated at call time so
+    runtime config updates are honoured. The personal and org flows below
+    are each a thin wrapper around a shared implementation taking an
+    :class:`OAuthApp`.
     """
-    if uri not in settings.allowed_redirect_uris_list:
-        raise ValueError(f"redirect_uri {uri!r} is not on the allowlist.")
+
+    tokens: TokenStore
+    configured: Callable[[], bool]
+    client_id: Callable[[], str]
+    client_secret: Callable[[], str]
+    redirect_uri: Callable[[], str]
+    allowed_redirect_uris: Callable[[], list[str]]
+    scopes: Callable[[], list[str]]
+    token_file: Callable[[], str]
+    not_configured_message: str
+    allowlist_label: str
+    refresh_label: str
 
 
-def build_authorize_url() -> str:
-    """Return the LinkedIn consent-screen URL.
+PERSONAL_APP = OAuthApp(
+    tokens=tokens,
+    configured=lambda: settings.auth_configured,
+    client_id=lambda: settings.linkedin_client_id.get_secret_value(),
+    client_secret=lambda: settings.linkedin_client_secret.get_secret_value(),
+    redirect_uri=lambda: settings.linkedin_redirect_uri,
+    allowed_redirect_uris=lambda: settings.allowed_redirect_uris_list,
+    scopes=lambda: settings.linkedin_scopes_list,
+    token_file=lambda: settings.linkedin_token_file,
+    not_configured_message="LinkedIn client credentials are not configured.",
+    allowlist_label="allowlist",
+    refresh_label="refresh token",
+)
 
-    Raises RuntimeError if credentials are not configured and ValueError if
-    the configured redirect URI is not on the allowlist.
-    """
-    if not settings.auth_configured:
-        raise RuntimeError("LinkedIn client credentials are not configured.")
-    validate_redirect_uri(settings.linkedin_redirect_uri)
+# Dedicated org LinkedIn app (Community Management API), isolated from the
+# personal app so neither token store overwrites the other.
+ORG_APP = OAuthApp(
+    tokens=org_tokens,
+    configured=lambda: settings.org_auth_configured,
+    client_id=lambda: settings.linkedin_org_client_id.get_secret_value(),
+    client_secret=lambda: settings.linkedin_org_client_secret.get_secret_value(),
+    redirect_uri=lambda: settings.linkedin_org_redirect_uri,
+    allowed_redirect_uris=lambda: settings.org_allowed_redirect_uris_list,
+    scopes=lambda: settings.linkedin_org_scopes_list,
+    token_file=lambda: settings.linkedin_org_token_file,
+    not_configured_message="LinkedIn org app credentials are not configured.",
+    allowlist_label="org allowlist",
+    refresh_label="org refresh token",
+)
+
+
+def _validate_app_redirect_uri(app: OAuthApp, uri: str) -> None:
+    """Raise :class:`ValueError` unless ``uri`` is on ``app``'s allowlist."""
+    if uri not in app.allowed_redirect_uris():
+        raise ValueError(f"redirect_uri {uri!r} is not on the {app.allowlist_label}.")
+
+
+def _build_app_authorize_url(app: OAuthApp) -> str:
+    """Return the LinkedIn consent-screen URL for ``app``."""
+    if not app.configured():
+        raise RuntimeError(app.not_configured_message)
+    redirect_uri = app.redirect_uri()
+    _validate_app_redirect_uri(app, redirect_uri)
     state = secrets.token_urlsafe(16)
-    tokens.state = state
+    app.tokens.state = state
     params = {
         "response_type": "code",
-        "client_id": settings.linkedin_client_id.get_secret_value(),
-        "redirect_uri": settings.linkedin_redirect_uri,
+        "client_id": app.client_id(),
+        "redirect_uri": redirect_uri,
         "state": state,
-        "scope": " ".join(settings.linkedin_scopes_list),
+        "scope": " ".join(app.scopes()),
     }
     return f"{AUTHORIZE_URL}?{urllib.parse.urlencode(params)}"
+
+
+async def _request_app_token(
+    app: OAuthApp, grant: dict[str, str], default_refresh: str
+) -> dict[str, Any]:
+    """POST a token grant for ``app`` and persist the result in its store."""
+    async with httpx.AsyncClient() as client:
+        resp = await _retry_send(
+            client,
+            "POST",
+            ACCESS_TOKEN_URL,
+            data={
+                **grant,
+                "client_id": app.client_id(),
+                "client_secret": app.client_secret(),
+            },
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+        )
+    data: dict[str, Any] = resp.json()
+    store = app.tokens
+    store.access_token = data["access_token"]
+    store.refresh_token = data.get("refresh_token", default_refresh)
+    store.expires_at = time.time() + float(data.get("expires_in", 0))
+    store.save(app.token_file())
+    return data
 
 
 def _consume_state(store: TokenStore, state: str) -> None:
@@ -207,34 +280,56 @@ def _consume_state(store: TokenStore, state: str) -> None:
     store.state = ""
 
 
+async def _exchange_app_code(app: OAuthApp, code: str, state: str) -> dict[str, Any]:
+    """Exchange an authorization code for ``app``'s tokens."""
+    _consume_state(app.tokens, state)
+    redirect_uri = app.redirect_uri()
+    _validate_app_redirect_uri(app, redirect_uri)
+    grant = {"grant_type": "authorization_code", "code": code, "redirect_uri": redirect_uri}
+    return await _request_app_token(app, grant, "")
+
+
+async def _refresh_app_access_token(app: OAuthApp) -> dict[str, Any]:
+    """Use ``app``'s stored refresh token to obtain a new access token."""
+    refresh_token = app.tokens.refresh_token
+    if not refresh_token:
+        raise RuntimeError(f"No {app.refresh_label} available.")
+    grant = {"grant_type": "refresh_token", "refresh_token": refresh_token}
+    return await _request_app_token(app, grant, refresh_token)
+
+
+def _app_auth_headers(app: OAuthApp) -> dict[str, str]:
+    return {
+        "Authorization": f"Bearer {app.tokens.access_token}",
+        "Content-Type": "application/json",
+    }
+
+
+def validate_redirect_uri(uri: str) -> None:
+    """Ensure ``uri`` is on the configured allowlist.
+
+    Raises :class:`ValueError` when the redirect URI is not permitted,
+    guarding against open-redirect / token-exfiltration attacks.
+    """
+    _validate_app_redirect_uri(PERSONAL_APP, uri)
+
+
+def build_authorize_url() -> str:
+    """Return the LinkedIn consent-screen URL.
+
+    Raises RuntimeError if credentials are not configured and ValueError if
+    the configured redirect URI is not on the allowlist.
+    """
+    return _build_app_authorize_url(PERSONAL_APP)
+
+
 async def exchange_code(code: str, state: str) -> dict[str, Any]:
     """Exchange an authorization code for access + refresh tokens.
 
     Returns the token response dict.  Raises on mismatched state or
     HTTP error.
     """
-    _consume_state(tokens, state)
-    validate_redirect_uri(settings.linkedin_redirect_uri)
-    async with httpx.AsyncClient() as client:
-        resp = await _retry_send(
-            client,
-            "POST",
-            ACCESS_TOKEN_URL,
-            data={
-                "grant_type": "authorization_code",
-                "code": code,
-                "redirect_uri": settings.linkedin_redirect_uri,
-                "client_id": settings.linkedin_client_id.get_secret_value(),
-                "client_secret": settings.linkedin_client_secret.get_secret_value(),
-            },
-            headers={"Content-Type": "application/x-www-form-urlencoded"},
-        )
-    data: dict[str, Any] = resp.json()
-    tokens.access_token = data["access_token"]
-    tokens.refresh_token = data.get("refresh_token", "")
-    tokens.expires_at = time.time() + float(data.get("expires_in", 0))
-    tokens.save()
-    return data
+    return await _exchange_app_code(PERSONAL_APP, code, state)
 
 
 async def refresh_access_token() -> dict[str, Any]:
@@ -243,27 +338,7 @@ async def refresh_access_token() -> dict[str, Any]:
     Refresh is deliberately manual: it is not wired into the request path,
     so callers must invoke it explicitly when ``tokens.expires_at`` passes.
     """
-    if not tokens.refresh_token:
-        raise RuntimeError("No refresh token available.")
-    async with httpx.AsyncClient() as client:
-        resp = await _retry_send(
-            client,
-            "POST",
-            ACCESS_TOKEN_URL,
-            data={
-                "grant_type": "refresh_token",
-                "refresh_token": tokens.refresh_token,
-                "client_id": settings.linkedin_client_id.get_secret_value(),
-                "client_secret": settings.linkedin_client_secret.get_secret_value(),
-            },
-            headers={"Content-Type": "application/x-www-form-urlencoded"},
-        )
-    data: dict[str, Any] = resp.json()
-    tokens.access_token = data["access_token"]
-    tokens.refresh_token = data.get("refresh_token", tokens.refresh_token)
-    tokens.expires_at = time.time() + float(data.get("expires_in", 0))
-    tokens.save()
-    return data
+    return await _refresh_app_access_token(PERSONAL_APP)
 
 
 # ---------------------------------------------------------------------------
@@ -278,8 +353,7 @@ async def refresh_access_token() -> dict[str, Any]:
 
 def validate_org_redirect_uri(uri: str) -> None:
     """Ensure ``uri`` is on the org-app redirect allowlist."""
-    if uri not in settings.org_allowed_redirect_uris_list:
-        raise ValueError(f"redirect_uri {uri!r} is not on the org allowlist.")
+    _validate_app_redirect_uri(ORG_APP, uri)
 
 
 def build_org_authorize_url() -> str:
@@ -288,19 +362,7 @@ def build_org_authorize_url() -> str:
     Raises RuntimeError if the org app credentials are not configured and
     ValueError if the configured redirect URI is not on the allowlist.
     """
-    if not settings.org_auth_configured:
-        raise RuntimeError("LinkedIn org app credentials are not configured.")
-    validate_org_redirect_uri(settings.linkedin_org_redirect_uri)
-    state = secrets.token_urlsafe(16)
-    org_tokens.state = state
-    params = {
-        "response_type": "code",
-        "client_id": settings.linkedin_org_client_id.get_secret_value(),
-        "redirect_uri": settings.linkedin_org_redirect_uri,
-        "state": state,
-        "scope": " ".join(settings.linkedin_org_scopes_list),
-    }
-    return f"{AUTHORIZE_URL}?{urllib.parse.urlencode(params)}"
+    return _build_app_authorize_url(ORG_APP)
 
 
 async def exchange_org_code(code: str, state: str) -> dict[str, Any]:
@@ -309,28 +371,7 @@ async def exchange_org_code(code: str, state: str) -> dict[str, Any]:
     Tokens land in ``org_tokens`` (never ``tokens``). Raises on mismatched
     state or HTTP error.
     """
-    _consume_state(org_tokens, state)
-    validate_org_redirect_uri(settings.linkedin_org_redirect_uri)
-    async with httpx.AsyncClient() as client:
-        resp = await _retry_send(
-            client,
-            "POST",
-            ACCESS_TOKEN_URL,
-            data={
-                "grant_type": "authorization_code",
-                "code": code,
-                "redirect_uri": settings.linkedin_org_redirect_uri,
-                "client_id": settings.linkedin_org_client_id.get_secret_value(),
-                "client_secret": settings.linkedin_org_client_secret.get_secret_value(),
-            },
-            headers={"Content-Type": "application/x-www-form-urlencoded"},
-        )
-    data: dict[str, Any] = resp.json()
-    org_tokens.access_token = data["access_token"]
-    org_tokens.refresh_token = data.get("refresh_token", "")
-    org_tokens.expires_at = time.time() + float(data.get("expires_in", 0))
-    org_tokens.save(settings.linkedin_org_token_file)
-    return data
+    return await _exchange_app_code(ORG_APP, code, state)
 
 
 async def refresh_org_access_token() -> dict[str, Any]:
@@ -339,27 +380,7 @@ async def refresh_org_access_token() -> dict[str, Any]:
     Like :func:`refresh_access_token`, this is deliberately manual and not
     wired into the request path.
     """
-    if not org_tokens.refresh_token:
-        raise RuntimeError("No org refresh token available.")
-    async with httpx.AsyncClient() as client:
-        resp = await _retry_send(
-            client,
-            "POST",
-            ACCESS_TOKEN_URL,
-            data={
-                "grant_type": "refresh_token",
-                "refresh_token": org_tokens.refresh_token,
-                "client_id": settings.linkedin_org_client_id.get_secret_value(),
-                "client_secret": settings.linkedin_org_client_secret.get_secret_value(),
-            },
-            headers={"Content-Type": "application/x-www-form-urlencoded"},
-        )
-    data: dict[str, Any] = resp.json()
-    org_tokens.access_token = data["access_token"]
-    org_tokens.refresh_token = data.get("refresh_token", org_tokens.refresh_token)
-    org_tokens.expires_at = time.time() + float(data.get("expires_in", 0))
-    org_tokens.save(settings.linkedin_org_token_file)
-    return data
+    return await _refresh_app_access_token(ORG_APP)
 
 
 # ---------------------------------------------------------------------------
@@ -368,18 +389,12 @@ async def refresh_org_access_token() -> dict[str, Any]:
 
 
 def _auth_headers() -> dict[str, str]:
-    return {
-        "Authorization": f"Bearer {tokens.access_token}",
-        "Content-Type": "application/json",
-    }
+    return _app_auth_headers(PERSONAL_APP)
 
 
 def _org_auth_headers() -> dict[str, str]:
     """Auth headers for the dedicated org LinkedIn app's token."""
-    return {
-        "Authorization": f"Bearer {org_tokens.access_token}",
-        "Content-Type": "application/json",
-    }
+    return _app_auth_headers(ORG_APP)
 
 
 async def get_profile() -> dict[str, Any]:

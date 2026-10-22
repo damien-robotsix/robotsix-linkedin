@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
 from importlib.resources import files
 from typing import Any, NoReturn
 
@@ -203,24 +204,37 @@ async def auth_login() -> RedirectResponse:
     return RedirectResponse(url=url)
 
 
-@app.get("/auth/callback", tags=["auth"])
-async def auth_callback(code: str = Query(...), state: str = Query(...)) -> dict[str, Any]:
-    """Handle the OAuth redirect from LinkedIn — exchange code for tokens."""
+async def _handle_oauth_callback(
+    exchange: Callable[[str, str], Awaitable[dict[str, Any]]],
+    code: str,
+    state: str,
+    failure_prefix: str,
+    success_message: str,
+) -> dict[str, Any]:
+    """Shared body of the personal and org OAuth callback handlers."""
     try:
-        token_data = await auth.exchange_code(code, state)
+        token_data = await exchange(code, state)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
         raise HTTPException(
             status_code=502,
-            detail=f"Token exchange failed: {exc}",
+            detail=f"{failure_prefix} failed: {exc}",
         ) from exc
     return {
-        "message": "Authentication successful.",
+        "message": success_message,
         "token_type": token_data.get("token_type"),
         "expires_in": token_data.get("expires_in"),
         "scope": token_data.get("scope"),
     }
+
+
+@app.get("/auth/callback", tags=["auth"])
+async def auth_callback(code: str = Query(...), state: str = Query(...)) -> dict[str, Any]:
+    """Handle the OAuth redirect from LinkedIn — exchange code for tokens."""
+    return await _handle_oauth_callback(
+        auth.exchange_code, code, state, "Token exchange", "Authentication successful."
+    )
 
 
 @app.get("/auth/org/login", tags=["auth"])
@@ -247,21 +261,13 @@ async def org_auth_login() -> RedirectResponse:
 @app.get("/auth/org/callback", tags=["auth"])
 async def org_auth_callback(code: str = Query(...), state: str = Query(...)) -> dict[str, Any]:
     """Handle the org app's OAuth redirect — exchange code for org tokens."""
-    try:
-        token_data = await auth.exchange_org_code(code, state)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except Exception as exc:
-        raise HTTPException(
-            status_code=502,
-            detail=f"Org token exchange failed: {exc}",
-        ) from exc
-    return {
-        "message": "Organization app authentication successful.",
-        "token_type": token_data.get("token_type"),
-        "expires_in": token_data.get("expires_in"),
-        "scope": token_data.get("scope"),
-    }
+    return await _handle_oauth_callback(
+        auth.exchange_org_code,
+        code,
+        state,
+        "Org token exchange",
+        "Organization app authentication successful.",
+    )
 
 
 # ---------------------------------------------------------------------------
