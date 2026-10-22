@@ -225,7 +225,11 @@ async def exchange_code(code: str, state: str) -> dict[str, Any]:
 
 
 async def refresh_access_token() -> dict[str, Any]:
-    """Use the stored refresh token to obtain a new access token."""
+    """Use the stored refresh token to obtain a new access token.
+
+    Refresh is deliberately manual: it is not wired into the request path,
+    so callers must invoke it explicitly when ``tokens.expires_at`` passes.
+    """
     if not tokens.refresh_token:
         raise RuntimeError("No refresh token available.")
     async with httpx.AsyncClient() as client:
@@ -236,8 +240,8 @@ async def refresh_access_token() -> dict[str, Any]:
             data={
                 "grant_type": "refresh_token",
                 "refresh_token": tokens.refresh_token,
-                "client_id": settings.linkedin_client_id,
-                "client_secret": settings.linkedin_client_secret,
+                "client_id": settings.linkedin_client_id.get_secret_value(),
+                "client_secret": settings.linkedin_client_secret.get_secret_value(),
             },
             headers={"Content-Type": "application/x-www-form-urlencoded"},
         )
@@ -318,7 +322,11 @@ async def exchange_org_code(code: str, state: str) -> dict[str, Any]:
 
 
 async def refresh_org_access_token() -> dict[str, Any]:
-    """Use the stored org refresh token to obtain a new org access token."""
+    """Use the stored org refresh token to obtain a new org access token.
+
+    Like :func:`refresh_access_token`, this is deliberately manual and not
+    wired into the request path.
+    """
     if not org_tokens.refresh_token:
         raise RuntimeError("No org refresh token available.")
     async with httpx.AsyncClient() as client:
