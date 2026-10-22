@@ -271,9 +271,7 @@ async def test_share_content_not_retried_on_5xx(monkeypatch: pytest.MonkeyPatch)
 
     monkeypatch.setattr("asyncio.sleep", _no_sleep)
     monkeypatch.setattr(auth, "get_profile", fake_profile)
-    client = _SequenceClient(
-        [_FakeResponse(json_data=None, status_code=503, text="unavailable")]
-    )
+    client = _SequenceClient([_FakeResponse(json_data=None, status_code=503, text="unavailable")])
     monkeypatch.setattr(auth.httpx, "AsyncClient", lambda *a, **k: client)
     auth.tokens.access_token = "token"
 
@@ -349,6 +347,94 @@ async def test_exchange_org_code_state_mismatch_raises() -> None:
     auth.org_tokens.state = "expected"
     with pytest.raises(ValueError, match="state mismatch"):
         await auth.exchange_org_code("code", "tampered")
+
+
+# ---------------------------------------------------------------------------
+# Token refresh
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_refresh_access_token_posts_real_credentials(
+    monkeypatch: pytest.MonkeyPatch, _credentials: None
+) -> None:
+    response = _FakeResponse(
+        json_data={"access_token": "new-access", "refresh_token": "new-refresh", "expires_in": 60}
+    )
+    client = _patch_client(monkeypatch, response)
+    auth.tokens.refresh_token = "old-refresh"
+
+    data = await auth.refresh_access_token()
+
+    assert data["access_token"] == "new-access"
+    _, args, kwargs = client.calls[0]
+    assert args[0] == auth.ACCESS_TOKEN_URL
+    assert kwargs["data"]["grant_type"] == "refresh_token"
+    assert kwargs["data"]["refresh_token"] == "old-refresh"
+    # Must be the unmasked secrets, not SecretStr's "**********".
+    assert kwargs["data"]["client_id"] == "cid"
+    assert kwargs["data"]["client_secret"] == "csecret"
+    assert auth.tokens.access_token == "new-access"
+    assert auth.tokens.refresh_token == "new-refresh"
+    assert auth.tokens.expires_at > 60
+
+
+@pytest.mark.asyncio
+async def test_refresh_access_token_keeps_refresh_token_when_omitted(
+    monkeypatch: pytest.MonkeyPatch, _credentials: None
+) -> None:
+    response = _FakeResponse(json_data={"access_token": "new-access", "expires_in": 60})
+    _patch_client(monkeypatch, response)
+    auth.tokens.refresh_token = "old-refresh"
+
+    await auth.refresh_access_token()
+
+    assert auth.tokens.access_token == "new-access"
+    assert auth.tokens.refresh_token == "old-refresh"
+
+
+@pytest.mark.asyncio
+async def test_refresh_org_access_token_posts_real_credentials(
+    monkeypatch: pytest.MonkeyPatch, _org_credentials: None
+) -> None:
+    response = _FakeResponse(
+        json_data={
+            "access_token": "org-new-access",
+            "refresh_token": "org-new-refresh",
+            "expires_in": 60,
+        }
+    )
+    client = _patch_client(monkeypatch, response)
+    auth.org_tokens.refresh_token = "org-old-refresh"
+    auth.tokens.access_token = "personal-token"
+
+    data = await auth.refresh_org_access_token()
+
+    assert data["access_token"] == "org-new-access"
+    _, args, kwargs = client.calls[0]
+    assert args[0] == auth.ACCESS_TOKEN_URL
+    assert kwargs["data"]["grant_type"] == "refresh_token"
+    assert kwargs["data"]["refresh_token"] == "org-old-refresh"
+    assert kwargs["data"]["client_id"] == "org-cid"
+    assert kwargs["data"]["client_secret"] == "org-secret"
+    assert auth.org_tokens.access_token == "org-new-access"
+    assert auth.org_tokens.refresh_token == "org-new-refresh"
+    assert auth.org_tokens.expires_at > 60
+    assert auth.tokens.access_token == "personal-token"
+
+
+@pytest.mark.asyncio
+async def test_refresh_org_access_token_keeps_refresh_token_when_omitted(
+    monkeypatch: pytest.MonkeyPatch, _org_credentials: None
+) -> None:
+    response = _FakeResponse(json_data={"access_token": "org-new-access", "expires_in": 60})
+    _patch_client(monkeypatch, response)
+    auth.org_tokens.refresh_token = "org-old-refresh"
+
+    await auth.refresh_org_access_token()
+
+    assert auth.org_tokens.access_token == "org-new-access"
+    assert auth.org_tokens.refresh_token == "org-old-refresh"
 
 
 # ---------------------------------------------------------------------------
@@ -444,9 +530,7 @@ async def test_get_organization_returns_company(
             "vanityName": "robotsix",
             "logoV2": {
                 "original": "urn:li:digitalmediaAsset:C5600AQAbc",
-                "original~": {
-                    "elements": [{"url": "https://cdn.example/logo.png"}]
-                },
+                "original~": {"elements": [{"url": "https://cdn.example/logo.png"}]},
             },
         }
     )
