@@ -175,6 +175,69 @@ troubleshooting.
 | GET    | `/config`       | Current configuration (secrets masked) | No            |
 | PUT    | `/config`       | Update configuration and persist       | No            |
 | GET    | `/config/schema`| JSON Schema for the config model       | No            |
+| GET    | `/config/versions` | Config version history, newest first | No            |
+| POST   | `/config/rollback` | Restore an earlier config version    | No            |
+
+### `GET /config/versions`
+
+Returns the recorded config version history, **newest first**. Every successful
+`PUT /config` or `POST /config/rollback` appends a version. If nothing has been
+recorded yet, the list is empty.
+
+**Response:**
+
+```json
+{
+  "versions": [
+    {
+      "version": 2,
+      "timestamp": "2026-10-22T12:00:00+00:00",
+      "changed_keys": ["port"],
+      "data": {"port": 9001}
+    },
+    {
+      "version": 1,
+      "timestamp": "2026-10-22T11:00:00+00:00",
+      "changed_keys": ["port"],
+      "data": {"port": 9000}
+    }
+  ]
+}
+```
+
+- `version` — monotonically increasing version number
+- `timestamp` — when the version was recorded
+- `changed_keys` — config keys changed by that version
+- `data` — the config snapshot for that version
+
+### `POST /config/rollback`
+
+Restores an earlier config version. History is append-only, so a rollback
+writes the restored config as a **new** version instead of deleting later
+ones. Secrets are kept from the live config, not taken from history. The
+running settings are refreshed right away.
+
+**Request body:**
+
+```json
+{"version": 1}
+```
+
+**Response:**
+
+```json
+{
+  "status": "ok",
+  "version": 3,
+  "changed_keys": ["port"]
+}
+```
+
+- `version` — the new version number the rollback created
+- `changed_keys` — config keys the rollback changed
+
+Returns **400** (shared error envelope) if the requested version does not
+exist or the restored config is invalid.
 
 ### Error Response Format
 
