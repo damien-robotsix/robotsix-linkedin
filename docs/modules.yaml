@@ -1,0 +1,73 @@
+# Module taxonomy for robotsix-linkedin.
+# Validate with:  robotsix-modules validate docs/modules.yaml
+#                 robotsix-modules check-registration docs/modules.yaml
+package: linkedin_service
+
+# Repo scaffolding exempt from the check-registration completeness
+# requirement (extends the robotsix-modules built-in defaults, which
+# already cover .github/** and .pre-commit-config.yaml).
+excluded_paths:
+  - .robotsix-mill/**
+  - .gitignore
+  - .env.example
+  - uv.lock
+
+modules:
+  - id: root
+    description: >
+      Root-level project files: package manifest, documentation, security
+      policy, container image definition and deployment compose files, plus
+      the module taxonomy itself.
+    paths:
+      - README.md
+      - DEPLOY.md
+      - SECURITY.md
+      - pyproject.toml
+      - Dockerfile
+      - docker-compose.yml
+      - deploy/**
+      - docs/modules.yaml
+
+  - id: config
+    description: >
+      Service settings: the pydantic Settings model loaded through
+      robotsix-config, plus the bundled default config and its JSON Schema.
+    paths:
+      - src/linkedin_service/config.py
+      - config/**
+      - tests/test_config.py
+      - tests/test_config_loading.py
+
+  - id: auth
+    description: >
+      LinkedIn OAuth 2.0 flow: authorization URL and state handling, token
+      exchange/refresh and secure token persistence via
+      robotsix_http.oauth.SecureTokenStore.
+    paths:
+      - src/linkedin_service/auth.py
+      - tests/test_auth.py
+      - tests/test_oauth_flows.py
+      - tests/test_oauth_state.py
+    dependencies:
+      - config
+
+  - id: app
+    description: >
+      FastAPI application and entry point: HTTP endpoints for health,
+      profile reads and operator-gated writes, the settings panel, and the
+      chat skill served to fleet agents. Also owns the shared test fixtures.
+    paths:
+      - src/linkedin_service/__init__.py
+      - src/linkedin_service/__main__.py
+      - src/linkedin_service/app.py
+      - src/linkedin_service/chat-skill.md
+      - tests/__init__.py
+      - tests/conftest.py
+      - tests/test_endpoints.py
+      - tests/test_health.py
+      - tests/test_linkedin_api.py
+      - tests/test_main.py
+      - tests/test_settings_panel.py
+    dependencies:
+      - auth
+      - config

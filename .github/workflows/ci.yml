@@ -47,8 +47,19 @@ jobs:
       - name: Install robotsix-llmio from GitHub
         run: pip install "robotsix-llmio @ git+https://github.com/damien-robotsix/robotsix-llmio@e31d639b9a392c70516a74d81efbaf5b02e1b04b"
 
+      # robotsix-modules is git-only (not on PyPI); install it before ".[dev]"
+      # so pip does not try to resolve the dev requirement from PyPI.
+      - name: Install robotsix-modules from GitHub
+        run: pip install "robotsix-modules @ git+https://github.com/damien-robotsix/robotsix-modules@f983b3310af1914c6a5503f5a4e1f551d32c7910"  # v0.5.3
+
       - name: Install dependencies
         run: pip install ".[dev]"
+
+      - name: Validate module taxonomy
+        run: |
+          robotsix-modules validate docs/modules.yaml
+          robotsix-modules check-registration docs/modules.yaml
+          robotsix-modules validate-paths docs/modules.yaml
 
       - name: Lint
         run: ruff check src/ tests/
