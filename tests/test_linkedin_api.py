@@ -223,7 +223,7 @@ async def test_share_content_returns_urn(monkeypatch: pytest.MonkeyPatch) -> Non
     async def fake_profile() -> dict[str, Any]:
         return {"sub": "member-42"}
 
-    monkeypatch.setattr(auth, "get_profile", fake_profile)
+    monkeypatch.setattr(auth.personal, "get_profile", fake_profile)
     response = _FakeResponse(
         status_code=201,
         headers={"x-restli-id": "urn:li:share:99999"},
@@ -243,7 +243,7 @@ async def test_share_content_surfaces_api_error(monkeypatch: pytest.MonkeyPatch)
     async def fake_profile() -> dict[str, Any]:
         return {"sub": "member-42"}
 
-    monkeypatch.setattr(auth, "get_profile", fake_profile)
+    monkeypatch.setattr(auth.personal, "get_profile", fake_profile)
     response = _FakeResponse(
         json_data=None,
         status_code=403,
@@ -298,7 +298,7 @@ async def test_share_content_not_retried_on_5xx(monkeypatch: pytest.MonkeyPatch)
         raise AssertionError("write POST must not be retried")
 
     monkeypatch.setattr("asyncio.sleep", _no_sleep)
-    monkeypatch.setattr(auth, "get_profile", fake_profile)
+    monkeypatch.setattr(auth.personal, "get_profile", fake_profile)
     client = _SequenceClient([_FakeResponse(json_data=None, status_code=503, text="unavailable")])
     monkeypatch.setattr(auth.httpx, "AsyncClient", lambda *a, **k: client)
     auth.tokens.access_token = "token"

@@ -116,7 +116,7 @@ class _ConfigUpdate(BaseModel):
 def _refresh_settings() -> None:
     """Reload the live ``settings`` singleton from the config file in place.
 
-    ``auth.py`` and other modules imported ``settings`` by reference, so an
+    ``auth`` and other modules imported ``settings`` by reference, so an
     in-place copy of the freshly loaded values makes a persisted change
     visible to them without a reload.
     """
