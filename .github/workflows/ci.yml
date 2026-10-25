@@ -7,6 +7,19 @@ on:
   pull_request:
     branches: [main]
 
+# GITHUB_TOKEN permission model (least privilege):
+# - Default: the workflow-level block below grants only `contents: read`, so
+#   any job without its own `permissions:` block cannot write anything.
+# - Every job still declares its own `permissions:` block (AGENT.md CI
+#   conventions) instead of relying on the default:
+#   - lint-and-test: `contents: read` only (checkout, lint, type check, test).
+#   - build: `contents: read` only (the image is built locally, never pushed).
+#   - publish: `contents: read` + `packages: write`; the write scope is needed
+#     solely to push the image to ghcr.io, and the job runs only on `push`
+#     events (main / v* tags), never on pull requests.
+#   - lint-workflows: `contents: read` only (actionlint / zizmor).
+# - Grant a write scope only on the job that needs it, with an inline comment
+#   naming the reason.
 permissions:
   contents: read
 
