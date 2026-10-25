@@ -1,0 +1,74 @@
+# Canonical module taxonomy for robotsix-linkedin — what modules exist and
+# where their files live (schema: robotsix-modules).
+#
+# `package` enables the convention globs (src/<package>/<id>/**,
+# tests/<id>/**, docs/<id>/**) for entries that omit `paths`. Tests in this
+# repo are flat (tests/test_*.py), so every module lists its paths
+# explicitly.
+#
+# Root scaffolding (pyproject.toml, uv.lock, README.md, AGENT.md,
+# SECURITY.md, .env.example, .gitignore, .github/**, .robotsix-mill/**) is
+# covered by the robotsix-modules built-in excluded defaults.
+
+package: linkedin_service
+
+excluded_paths:
+  # The taxonomy itself is repo scaffolding, not a logical module.
+  - docs/modules.yaml
+
+modules:
+  - id: service
+    description: >-
+      FastAPI application and process entry point: the HTTP routes
+      (health, profile reads, operator-gated writes, settings panel), the
+      uvicorn launcher, and the chat skill shipped with the package. Also
+      owns the package root and shared test fixtures.
+    paths:
+      - src/linkedin_service/__init__.py
+      - src/linkedin_service/__main__.py
+      - src/linkedin_service/app.py
+      - src/linkedin_service/chat-skill.md
+      - tests/__init__.py
+      - tests/conftest.py
+      - tests/test_endpoints.py
+      - tests/test_health.py
+      - tests/test_linkedin_api.py
+      - tests/test_main.py
+      - tests/test_settings_panel.py
+    dependencies:
+      - auth
+      - config
+
+  - id: auth
+    description: >-
+      LinkedIn OAuth 2.0 flows and API access: personal and organization
+      token acquisition, secure token storage and refresh, and the
+      organization API helpers built on top of them.
+    paths:
+      - src/linkedin_service/auth/**
+      - tests/test_auth.py
+      - tests/test_oauth_flows.py
+      - tests/test_oauth_state.py
+    dependencies:
+      - config
+
+  - id: config
+    description: >-
+      Service settings loaded through robotsix-config: the Settings model,
+      the JSON schema exposed to the settings panel, and the default
+      config/config.json shipped with the repo.
+    paths:
+      - src/linkedin_service/config.py
+      - config/**
+      - tests/test_config.py
+      - tests/test_config_loading.py
+
+  - id: deploy
+    description: >-
+      Container build and deployment descriptors: the Dockerfile, the local
+      and production docker-compose files, and the deployment guide.
+    paths:
+      - Dockerfile
+      - docker-compose.yml
+      - deploy/**
+      - DEPLOY.md
