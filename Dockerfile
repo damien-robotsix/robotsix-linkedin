@@ -28,6 +28,12 @@ FROM python:3.14-slim AS runtime
 
 WORKDIR /app
 
+# The app runs from /app/.venv and never needs pip at runtime; drop the base
+# image's system pip so its vendored deps (urllib3, msgpack, setuptools — listed
+# in pip's bundled SBOM) don't ship in the image or trip the Trivy gate.
+RUN python -m pip uninstall -y pip \
+    && rm -rf /usr/local/lib/python3.14/ensurepip/_bundled
+
 COPY --from=builder /app/.venv /app/.venv
 
 ENV PATH="/app/.venv/bin:$PATH" \
