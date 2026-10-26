@@ -14,10 +14,12 @@ on:
 #   conventions) instead of relying on the default:
 #   - lint-and-test: `contents: read` only (checkout, lint, type check, test).
 #   - modules: `contents: read` only (robotsix-modules taxonomy checks).
-#   - build: `contents: read` only (the image is built locally, never pushed).
-#   - publish: `contents: read` + `packages: write`; the write scope is needed
-#     solely to push the image to ghcr.io, and the job runs only on `push`
-#     events (main / v* tags), never on pull requests.
+#   - build (reusable docker-pr-scan.yml, pull requests only): `contents: read`
+#     + `security-events: write` to upload the Trivy SARIF; never pushes.
+#   - publish (reusable docker-release.yml, `push` events only — main / v*
+#     tags): `contents: read` + `packages: write` (push to ghcr.io),
+#     `id-token: write` + `attestations: write` (provenance/SBOM
+#     attestations) and `security-events: write` (Trivy SARIF upload).
 #   - lint-workflows: `contents: read` only (actionlint / zizmor).
 # - Grant a write scope only on the job that needs it, with an inline comment
 #   naming the reason.
@@ -98,63 +100,32 @@ jobs:
       - name: Validate module paths
         run: uv run --frozen robotsix-modules validate-paths docs/modules.yaml --root .
 
+  # PR-time image build + Trivy gate (CRITICAL/HIGH) via the shared reusable
+  # workflow; the image is built with push: false and never published.
   build:
-    name: Build Docker image
-    runs-on: ubuntu-latest
+    name: Build and scan Docker image
     needs: lint-and-test
+    if: github.event_name == 'pull_request'
+    uses: damien-robotsix/robotsix-github-workflows/.github/workflows/docker-pr-scan.yml@05d872b062890597dfcdd83d0eeac8918edc3618  # v1.3.0
     permissions:
-      contents: read  # checkout the repository; image is built locally, not pushed
-    steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
-        with:
-          persist-credentials: false
+      contents: read  # checkout the repository
+      security-events: write  # upload the Trivy SARIF report to Code Scanning
 
-      - name: Build Docker image
-        env:
-          IMAGE_TAG: ${{ github.sha }}
-        run: docker build -t "robotsix-linkedin:${IMAGE_TAG}" .
-
+  # Push-time publish via the shared reusable workflow: builds, pushes to
+  # ghcr.io/damien-robotsix/robotsix-linkedin (tags: branch, semver, sha —
+  # deploy/docker-compose.yml pulls the `main` branch tag), Trivy-scans with a
+  # SARIF upload, and attaches provenance/SBOM attestations.
   publish:
     name: Publish Docker image
-    runs-on: ubuntu-latest
     needs: lint-and-test
     if: github.event_name == 'push'
+    uses: damien-robotsix/robotsix-github-workflows/.github/workflows/docker-release.yml@05d872b062890597dfcdd83d0eeac8918edc3618  # v1.3.0
     permissions:
       contents: read  # checkout the repository
       packages: write  # push the image to ghcr.io
-    steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
-        with:
-          persist-credentials: false
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f  # v3.12.0
-
-      - name: Log in to GitHub Container Registry
-        uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772  # v3.4.0
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Extract metadata
-        id: meta
-        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051  # v5.10.0
-        with:
-          images: ghcr.io/damien-robotsix/robotsix-linkedin
-          tags: |
-            type=ref,event=branch
-            type=ref,event=tag
-            type=sha
-            type=raw,value=latest,enable={{is_default_branch}}
-
-      - name: Build and push image
-        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8  # v6.19.2
-        with:
-          context: .
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+      id-token: write  # OIDC token for signing build attestations
+      attestations: write  # attach provenance/SBOM attestations to the image
+      security-events: write  # upload the Trivy SARIF report to Code Scanning
 
   lint-workflows:
     uses: damien-robotsix/robotsix-github-workflows/.github/workflows/lint-workflows.yml@c8c2ac9b1dcf02802770818672935ed533bae503  # v1.0.7
