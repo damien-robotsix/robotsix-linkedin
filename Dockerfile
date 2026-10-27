@@ -10,6 +10,9 @@ ENV UV_COMPILE_BYTECODE=1 \
 WORKDIR /app
 
 # git is needed to fetch the robotsix-* git dependencies pinned in uv.lock.
+# DL3008: git is a build-only tool in this discarded builder stage; pinning a
+# Debian package version breaks the build once the archive drops that version.
+# hadolint ignore=DL3008
 RUN apt-get update && apt-get install -y --no-install-recommends git \
     && rm -rf /var/lib/apt/lists/*
 
