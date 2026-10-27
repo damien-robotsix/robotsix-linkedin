@@ -379,4 +379,4 @@ docker compose up --build
 
 ## CI
 
-GitHub Actions workflow (`.github/workflows/ci.yml`) runs lint, type check, tests, and Docker build on every push/PR to `main`.
+GitHub Actions workflow (`.github/workflows/ci.yml`) runs lint, type check, tests, and Docker build on every push/PR to `main`. `.github/workflows/codeql.yml` runs CodeQL (Python) on push to `main`, pull requests and weekly; `.github/workflows/dependency-review.yml` gates pull requests (including Dependabot PRs) on newly introduced dependencies with moderate-or-higher vulnerabilities.
