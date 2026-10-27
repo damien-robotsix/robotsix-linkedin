@@ -1,0 +1,29 @@
+name: CodeQL
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "23 4 * * 1"  # weekly, Monday 04:23 UTC
+
+permissions: {}  # no workflow-level default; the job grants its own
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  # CodeQL static analysis via the shared reusable workflow (Python,
+  # no build step required).
+  codeql:
+    name: CodeQL analysis
+    uses: damien-robotsix/robotsix-github-workflows/.github/workflows/codeql.yml@47523e8aa2d34d41da060d29b57f75ab262cb840  # v1.4.0
+    with:
+      languages: python
+      build-mode: none
+    permissions:
+      contents: read  # checkout the repository
+      actions: read  # read workflow run metadata for CodeQL
+      security-events: write  # upload CodeQL SARIF results to Code Scanning

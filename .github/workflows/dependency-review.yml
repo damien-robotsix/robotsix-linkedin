@@ -1,0 +1,25 @@
+name: Dependency review
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions: {}  # no workflow-level default; the job grants its own
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # PR gate: fail on newly introduced dependencies with known
+  # vulnerabilities of moderate severity or higher (incl. Dependabot PRs,
+  # which are otherwise auto-merged).
+  dependency-review:
+    name: Dependency review
+    if: github.event_name == 'pull_request'
+    uses: damien-robotsix/robotsix-github-workflows/.github/workflows/dependency-review.yml@47523e8aa2d34d41da060d29b57f75ab262cb840  # v1.4.0
+    with:
+      fail-on-severity: moderate
+    permissions:
+      contents: read  # read the dependency manifests and lockfiles
+      pull-requests: write  # PR summary comment from dependency-review
