@@ -727,7 +727,7 @@ requires-dist = [
     { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.23,<1" },
     { name = "robotsix-config", git = "https://github.com/damien-robotsix/robotsix-config?rev=b68476fa9aab58f70697d870da956220ecf9cf48" },
     { name = "robotsix-http", extras = ["fastapi"], git = "https://github.com/damien-robotsix/robotsix-http?rev=952d984b1d228efcc880bca9f7d6b00e14eb3eed" },
-    { name = "robotsix-llmio", git = "https://github.com/damien-robotsix/robotsix-llmio?rev=e31d639b9a392c70516a74d81efbaf5b02e1b04b" },
+    { name = "robotsix-llmio", git = "https://github.com/damien-robotsix/robotsix-llmio?rev=a4b2c8d09eb810170f1d3b13ba9257d95ef3b6d4" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.4,<1" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.29,<1" },
 ]
@@ -738,8 +738,8 @@ dev = [{ name = "robotsix-modules", git = "https://github.com/damien-robotsix/ro
 
 [[package]]
 name = "robotsix-llmio"
-version = "0.7.6"
-source = { git = "https://github.com/damien-robotsix/robotsix-llmio?rev=e31d639b9a392c70516a74d81efbaf5b02e1b04b#e31d639b9a392c70516a74d81efbaf5b02e1b04b" }
+version = "0.10.1"
+source = { git = "https://github.com/damien-robotsix/robotsix-llmio?rev=a4b2c8d09eb810170f1d3b13ba9257d95ef3b6d4#a4b2c8d09eb810170f1d3b13ba9257d95ef3b6d4" }
 dependencies = [
     { name = "anyio" },
     { name = "httpx" },
