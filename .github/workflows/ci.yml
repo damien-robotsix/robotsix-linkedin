@@ -20,6 +20,8 @@ on:
 #     tags): `contents: read` + `packages: write` (push to ghcr.io),
 #     `id-token: write` + `attestations: write` (provenance/SBOM
 #     attestations) and `security-events: write` (Trivy SARIF upload).
+#   - lint-dockerfile (reusable lint-dockerfile.yml): `contents: read` only
+#     (hadolint).
 #   - lint-workflows: `contents: read` only (actionlint / zizmor).
 # - Grant a write scope only on the job that needs it, with an inline comment
 #   naming the reason.
@@ -126,6 +128,16 @@ jobs:
       id-token: write  # OIDC token for signing build attestations
       attestations: write  # attach provenance/SBOM attestations to the image
       security-events: write  # upload the Trivy SARIF report to Code Scanning
+
+  # Shared hadolint gate for the Dockerfile the build/publish jobs consume.
+  lint-dockerfile:
+    name: Lint Dockerfile
+    uses: damien-robotsix/robotsix-github-workflows/.github/workflows/lint-dockerfile.yml@47523e8aa2d34d41da060d29b57f75ab262cb840  # v1.4.0
+    with:
+      dockerfiles: Dockerfile
+      failure-threshold: warning
+    permissions:
+      contents: read  # checkout the repository; no write scopes needed
 
   lint-workflows:
     uses: damien-robotsix/robotsix-github-workflows/.github/workflows/lint-workflows.yml@c8c2ac9b1dcf02802770818672935ed533bae503  # v1.0.7
