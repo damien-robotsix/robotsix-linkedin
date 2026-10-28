@@ -379,4 +379,4 @@ docker compose up --build
 
 ## CI
 
-GitHub Actions workflow (`.github/workflows/ci.yml`) runs lint, type check, tests, and Docker build on every push/PR to `main`. `.github/workflows/codeql.yml` runs CodeQL (Python) on push to `main`, pull requests and weekly; `.github/workflows/dependency-review.yml` gates pull requests (including Dependabot PRs) on newly introduced dependencies with moderate-or-higher vulnerabilities.
+GitHub Actions workflow (`.github/workflows/ci.yml`) runs lint, type check, tests, and Docker build on every push/PR to `main`. `.github/workflows/codeql.yml` runs CodeQL (Python) on push to `main`, pull requests and weekly; `.github/workflows/dependency-review.yml` gates pull requests (including Dependabot PRs) on newly introduced dependencies with moderate-or-higher vulnerabilities. `.github/workflows/release-please.yml` runs release-please on push to `main`: it opens or updates a release PR, and merging that PR creates the `v<semver>` tag (which triggers the `publish` job) and the GitHub Release. Versioning is driven by `release-please-config.json` and `.release-please-manifest.json`, and changes are logged in `CHANGELOG.md`.
