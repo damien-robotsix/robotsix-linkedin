@@ -50,7 +50,7 @@ override-dependencies = [
 [tool.uv.sources]
 robotsix-config = { git = "https://github.com/damien-robotsix/robotsix-config", rev = "b68476fa9aab58f70697d870da956220ecf9cf48" }
 robotsix-http = { git = "https://github.com/damien-robotsix/robotsix-http", rev = "952d984b1d228efcc880bca9f7d6b00e14eb3eed" }
-robotsix-llmio = { git = "https://github.com/damien-robotsix/robotsix-llmio", rev = "e31d639b9a392c70516a74d81efbaf5b02e1b04b" }
+robotsix-llmio = { git = "https://github.com/damien-robotsix/robotsix-llmio", rev = "97b69c33b0c836b9f288ab5c69b913876b1229d7" }
 robotsix-modules = { git = "https://github.com/damien-robotsix/robotsix-modules", rev = "f983b3310af1914c6a5503f5a4e1f551d32c7910" }  # v0.5.3
 
 [tool.hatch.build.targets.wheel]
