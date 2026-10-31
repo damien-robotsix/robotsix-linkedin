@@ -27,9 +27,8 @@ dev = [
 ]
 
 # uv-only dev tooling (PEP 735). Kept out of the `dev` extra because
-# robotsix-modules is a git-only dependency that the pip-based
-# lint-and-test job cannot resolve; the `modules` CI job installs it via
-# `uv run --frozen`.
+# robotsix-modules is only needed by the `modules` CI job, which installs it
+# via `uv run --frozen`.
 [dependency-groups]
 dev = [
     "robotsix-modules",
@@ -62,6 +61,12 @@ line-length = 100
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "W", "UP"]
+
+[tool.deptry]
+# The `dev` extra holds test/lint tooling (pytest, ruff, mypy, …) that is
+# never imported from src/; tell deptry it is a dev group so the shared
+# python-ci.yml deptry step does not flag it as unused (DEP002).
+pep621_dev_dependency_groups = ["dev"]
 
 [tool.mypy]
 python_version = "3.14"
