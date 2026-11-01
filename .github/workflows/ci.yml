@@ -24,6 +24,8 @@ on:
 #   - lint-dockerfile (reusable lint-dockerfile.yml): `contents: read` only
 #     (hadolint).
 #   - lint-workflows: `contents: read` only (actionlint / zizmor).
+#   - secret-scan (reusable python-security.yml): `contents: read` only
+#     (TruffleHog secret scan + pip-audit).
 # - Grant a write scope only on the job that needs it, with an inline comment
 #   naming the reason.
 permissions:
@@ -121,3 +123,18 @@ jobs:
       run-zizmor: true
     permissions:
       contents: read
+
+  # Shared TruffleHog secret scan (robotsix-standards security-posture);
+  # linkedin handles LinkedIn OAuth tokens. pip-audit stays on until the
+  # python-ci v1.5.0 migration brings its own dependency audit.
+  secret-scan:
+    name: Secret scan
+    uses: damien-robotsix/robotsix-github-workflows/.github/workflows/python-security.yml@86a722f2938c1dda343bbf8d3c5989613cbf1794  # v1.5.0
+    with:
+      # The shared default ("tracing") is not an extra of this project.
+      install-extras: "dev"
+      trufflehog-pr-diff: true
+      trufflehog-extra-args: "--results=verified,unknown"
+      run-pip-audit: true
+    permissions:
+      contents: read  # checkout the repository; no write scopes needed
