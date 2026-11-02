@@ -44,14 +44,14 @@ dev = [
 # unchanged), so overriding the pin graph-wide is safe. Drop this override
 # once robotsix-llmio bumps its own robotsix-http pin in lockstep.
 override-dependencies = [
-    "robotsix-http @ git+https://github.com/damien-robotsix/robotsix-http@952d984b1d228efcc880bca9f7d6b00e14eb3eed",
+    "robotsix-http @ git+https://github.com/damien-robotsix/robotsix-http@26a59975c450bddc79a5f9044612455035b8b5a8",
 ]
 
 [tool.uv.sources]
-robotsix-config = { git = "https://github.com/damien-robotsix/robotsix-config", rev = "b68476fa9aab58f70697d870da956220ecf9cf48" }
-robotsix-http = { git = "https://github.com/damien-robotsix/robotsix-http", rev = "952d984b1d228efcc880bca9f7d6b00e14eb3eed" }
-robotsix-llmio = { git = "https://github.com/damien-robotsix/robotsix-llmio", rev = "e31d639b9a392c70516a74d81efbaf5b02e1b04b" }
-robotsix-modules = { git = "https://github.com/damien-robotsix/robotsix-modules", rev = "f983b3310af1914c6a5503f5a4e1f551d32c7910" }  # v0.5.3
+robotsix-config = { git = "https://github.com/damien-robotsix/robotsix-config", rev = "0e45213dd987b5dc5a082c3bc482fbc6be6a67ca" }
+robotsix-http = { git = "https://github.com/damien-robotsix/robotsix-http", rev = "26a59975c450bddc79a5f9044612455035b8b5a8" }
+robotsix-llmio = { git = "https://github.com/damien-robotsix/robotsix-llmio", rev = "4ebb6c0cf8398ea8553729d93d64408167119c90" }
+robotsix-modules = { git = "https://github.com/damien-robotsix/robotsix-modules", rev = "d84617c297130783d422d4044bb4ad96992d0dac" }  # v0.5.3
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/linkedin_service"]
