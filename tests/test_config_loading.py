@@ -235,9 +235,7 @@ def test_config_credentials_build_org_authorize_url(
     url = auth.build_org_authorize_url()
 
     assert "client_id=org-cid-xyz" in url
-    assert (
-        "redirect_uri=https%3A%2F%2Fapp.example.com%2Fauth%2Forg%2Fcallback" in url
-    )
+    assert "redirect_uri=https%3A%2F%2Fapp.example.com%2Fauth%2Forg%2Fcallback" in url
     assert "r_organization_social" in url and "rw_organization_admin" in url
 
 

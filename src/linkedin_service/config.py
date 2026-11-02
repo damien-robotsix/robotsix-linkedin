@@ -65,7 +65,8 @@ class Settings(BaseModel):
     linkedin_org_token_file: str = "~/.config/linkedin-service/org-tokens.json"
 
     # --- Service ---
-    host: str = "0.0.0.0"
+    # Containerised service: must bind all interfaces to be reachable.
+    host: str = "0.0.0.0"  # nosec B104
     port: int = 8000
 
     # --- Operator confirmation ---
