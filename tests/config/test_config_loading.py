@@ -25,7 +25,7 @@ from robotsix_config import InvalidConfigError, load_config
 from linkedin_service import auth
 from linkedin_service.config import Settings
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
+REPO_ROOT = Path(__file__).resolve().parents[2]
 TEMPLATE_CONFIG = REPO_ROOT / "config" / "config.json"
 
 
