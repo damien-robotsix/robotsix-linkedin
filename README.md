@@ -329,6 +329,13 @@ requires operator confirmation:
 1. First call returns a `confirmation_token`.
 2. Re-submit with `&confirmation_token=...` to execute.
 
+The token is bound to the exact `text` and `visibility` of the first call.
+Re-submitting with different text or visibility returns **400** and nothing is
+posted; request a new token instead. A token is single-use and expires 10
+minutes after it is issued. An expired, already-used, or unknown token also
+returns **400**. When `require_operator_confirmation` is `false`, the post is
+made directly without a token.
+
 On success the response includes the created post URN, e.g.
 `{"status": "posted", "result": {"id": "urn:li:share:...", "urn": "urn:li:share:...", ...}}`.
 
