@@ -47,9 +47,7 @@ modules:
       organization API helpers built on top of them.
     paths:
       - src/linkedin_service/auth/**
-      - tests/test_auth.py
-      - tests/test_oauth_flows.py
-      - tests/test_oauth_state.py
+      - tests/auth/**
     dependencies:
       - config
 
