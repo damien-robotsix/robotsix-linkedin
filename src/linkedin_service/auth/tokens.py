@@ -37,6 +37,12 @@ class LinkedInAPIError(RuntimeError):
     """
 
     def __init__(self, status_code: int, body: str) -> None:
+        """Store the failed response details.
+
+        Args:
+            status_code: HTTP status code returned by LinkedIn.
+            body: Raw response body text returned by LinkedIn.
+        """
         self.status_code = status_code
         self.body = body
         super().__init__(f"LinkedIn API returned {status_code}: {body}")
