@@ -78,6 +78,7 @@ class Settings(BaseModel):
 
     @property
     def linkedin_scopes_list(self) -> list[str]:
+        """Return the configured personal-app OAuth scopes as a list."""
         return self.linkedin_scopes.split()
 
     @property
