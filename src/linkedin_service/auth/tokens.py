@@ -144,20 +144,46 @@ tokens.load()
 org_tokens = TokenStore()
 org_tokens.load(settings.linkedin_org_token_file)
 
-# Pending confirmation tokens for write operations.
+# Lifetime of an unconfirmed write-confirmation token, in seconds.
+CONFIRMATION_TOKEN_TTL_SECONDS = 600.0
+
+# Pending confirmation tokens for write operations, keyed by token. Each
+# entry holds the monotonic ``issued_at`` timestamp and the bound ``payload``.
 _pending_confirmations: dict[str, dict[str, Any]] = {}
+
+
+def _purge_expired_confirmations(now: float) -> None:
+    """Drop every pending confirmation older than the TTL."""
+    expired = [
+        token
+        for token, entry in _pending_confirmations.items()
+        if now - entry["issued_at"] >= CONFIRMATION_TOKEN_TTL_SECONDS
+    ]
+    for token in expired:
+        del _pending_confirmations[token]
 
 
 def generate_confirmation_token(payload: dict[str, Any]) -> str:
     """Issue a one-time confirmation token for a state-mutating action."""
+    now = time.monotonic()
+    _purge_expired_confirmations(now)
     token = secrets.token_urlsafe(32)
-    _pending_confirmations[token] = payload
+    _pending_confirmations[token] = {"issued_at": now, "payload": payload}
     return token
 
 
 def consume_confirmation_token(token: str) -> dict[str, Any] | None:
-    """Consume (pop) a confirmation token. Returns the payload or None."""
-    return _pending_confirmations.pop(token, None)
+    """Consume (pop) a confirmation token.
+
+    Returns the bound payload, or ``None`` when the token is unknown,
+    already used, or older than :data:`CONFIRMATION_TOKEN_TTL_SECONDS`.
+    """
+    _purge_expired_confirmations(time.monotonic())
+    entry = _pending_confirmations.pop(token, None)
+    if entry is None:
+        return None
+    payload: dict[str, Any] = entry["payload"]
+    return payload
 
 
 # ---------------------------------------------------------------------------

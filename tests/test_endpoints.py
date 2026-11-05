@@ -116,3 +116,118 @@ async def test_organization_detail_returns_company(client, monkeypatch):
     resp = await client.get("/organizations/987654")
     assert resp.status_code == 200
     assert resp.json()["name"] == "Robotsix"
+
+
+@pytest.fixture
+def share_spy(monkeypatch):
+    """Authenticate and replace ``auth.share_content`` with a recorder."""
+    import linkedin_service.auth as auth_mod
+
+    auth_mod.tokens.access_token = "token"
+    monkeypatch.setattr(auth_mod.settings, "require_operator_confirmation", True)
+    calls: list[tuple[str, str]] = []
+
+    async def fake_share_content(text, visibility):
+        calls.append((text, visibility))
+        return {"id": "urn:li:share:1"}
+
+    monkeypatch.setattr(auth_mod, "share_content", fake_share_content)
+    return calls
+
+
+async def _issue_token(client, text="A", visibility="CONNECTIONS"):
+    resp = await client.post("/share", params={"text": text, "visibility": visibility})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["status"] == "confirmation_required"
+    assert body["confirmation_token"]
+    return body["confirmation_token"]
+
+
+@pytest.mark.asyncio
+async def test_share_first_call_requires_confirmation(client, share_spy):
+    """The first /share call issues a token and does not post."""
+    await _issue_token(client)
+    assert share_spy == []
+
+
+@pytest.mark.asyncio
+async def test_share_resubmit_with_matching_token_posts(client, share_spy):
+    """Resubmitting the same text/visibility with the token posts."""
+    token = await _issue_token(client)
+    resp = await client.post(
+        "/share",
+        params={"text": "A", "visibility": "CONNECTIONS", "confirmation_token": token},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "posted"
+    assert share_spy == [("A", "CONNECTIONS")]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "params",
+    [
+        {"text": "B", "visibility": "CONNECTIONS"},
+        {"text": "A", "visibility": "PUBLIC"},
+    ],
+)
+async def test_share_resubmit_with_different_payload_rejected(client, share_spy, params):
+    """A token approved for one payload cannot post different text/visibility."""
+    token = await _issue_token(client)
+    resp = await client.post("/share", params={**params, "confirmation_token": token})
+    assert resp.status_code == 400
+    assert share_spy == []
+
+
+@pytest.mark.asyncio
+async def test_share_token_is_single_use(client, share_spy):
+    """A confirmation token cannot be replayed."""
+    token = await _issue_token(client)
+    params = {"text": "A", "visibility": "CONNECTIONS", "confirmation_token": token}
+    assert (await client.post("/share", params=params)).status_code == 200
+    resp = await client.post("/share", params=params)
+    assert resp.status_code == 400
+    assert share_spy == [("A", "CONNECTIONS")]
+
+
+@pytest.mark.asyncio
+async def test_share_expired_token_rejected(client, share_spy):
+    """A token older than the TTL is rejected and purged."""
+    from linkedin_service.auth import _pending_confirmations
+    from linkedin_service.auth.tokens import CONFIRMATION_TOKEN_TTL_SECONDS
+
+    token = await _issue_token(client)
+    _pending_confirmations[token]["issued_at"] -= CONFIRMATION_TOKEN_TTL_SECONDS + 1
+    resp = await client.post(
+        "/share",
+        params={"text": "A", "visibility": "CONNECTIONS", "confirmation_token": token},
+    )
+    assert resp.status_code == 400
+    assert token not in _pending_confirmations
+    assert share_spy == []
+
+
+@pytest.mark.asyncio
+async def test_share_expired_tokens_purged_on_generate(client, share_spy):
+    """Issuing a new token purges expired pending confirmations."""
+    from linkedin_service.auth import _pending_confirmations
+    from linkedin_service.auth.tokens import CONFIRMATION_TOKEN_TTL_SECONDS
+
+    old = await _issue_token(client)
+    _pending_confirmations[old]["issued_at"] -= CONFIRMATION_TOKEN_TTL_SECONDS + 1
+    new = await _issue_token(client)
+    assert old not in _pending_confirmations
+    assert new in _pending_confirmations
+
+
+@pytest.mark.asyncio
+async def test_share_without_confirmation_setting_posts_directly(client, share_spy, monkeypatch):
+    """With require_operator_confirmation=False the post goes straight through."""
+    import linkedin_service.auth as auth_mod
+
+    monkeypatch.setattr(auth_mod.settings, "require_operator_confirmation", False)
+    resp = await client.post("/share", params={"text": "A"})
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "posted"
+    assert share_spy == [("A", "PUBLIC")]
