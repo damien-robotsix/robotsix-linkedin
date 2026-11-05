@@ -395,6 +395,18 @@ async def create_share(
                 status_code=400,
                 detail="Invalid or expired confirmation token.",
             )
+        if (
+            payload.get("action") != "share"
+            or payload.get("text") != text
+            or payload.get("visibility") != visibility
+        ):
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Confirmation token does not match this request; "
+                    "request a new confirmation token."
+                ),
+            )
     try:
         result = await auth.share_content(text, visibility)
     except Exception as exc:
