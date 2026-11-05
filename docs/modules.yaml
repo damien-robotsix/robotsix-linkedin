@@ -2,9 +2,10 @@
 # where their files live (schema: robotsix-modules).
 #
 # `package` enables the convention globs (src/<package>/<id>/**,
-# tests/<id>/**, docs/<id>/**) for entries that omit `paths`. Tests in this
-# repo are flat (tests/test_*.py), so every module lists its paths
-# explicitly.
+# tests/<id>/**, docs/<id>/**) for entries that omit `paths`. The service
+# module's tests remain flat at the tests/ root (tests/test_*.py), which is
+# why that module lists its test paths explicitly; other modules keep their
+# tests under tests/<id>/**.
 #
 # Root scaffolding (pyproject.toml, uv.lock, README.md, AGENT.md,
 # SECURITY.md, .env.example, .gitignore, .github/**, .robotsix-mill/**,
