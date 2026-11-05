@@ -61,8 +61,7 @@ modules:
     paths:
       - src/linkedin_service/config.py
       - config/**
-      - tests/test_config.py
-      - tests/test_config_loading.py
+      - tests/config/**
 
   - id: deploy
     description: >-
