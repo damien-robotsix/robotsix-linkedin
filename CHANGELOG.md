@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.2.1](https://github.com/damien-robotsix/robotsix-linkedin/compare/v0.2.0...v0.2.1) (2026-11-05)
+
+
+### Bug Fixes
+
+* Bind /share confirmation token to the confirmed text/visibility and add TTL + tests (20261105T153526Z-bind-share-confirmation-token-to-the-con-6ef0) ([#114](https://github.com/damien-robotsix/robotsix-linkedin/issues/114)) ([360d375](https://github.com/damien-robotsix/robotsix-linkedin/commit/360d37516c829b61c3d23b10d7b1ec52ea27b3b2))
+
+
+### Documentation
+
+* docstring gap: add docstring to LinkedInAPIError.__init__ in src/linkedin_service/auth/tokens.py (20261105T164151Z-docstring-gap-add-docstring-to-linkedina-176f) ([#119](https://github.com/damien-robotsix/robotsix-linkedin/issues/119)) ([f211b1f](https://github.com/damien-robotsix/robotsix-linkedin/commit/f211b1f6fa010fe02d67bae95709b28eb8c16440))
+* docstring gap: add docstring to main in src/linkedin_service/__main__.py:11 (20261105T163016Z-docstring-gap-add-docstring-to-main-in-s-0e1e) ([#116](https://github.com/damien-robotsix/robotsix-linkedin/issues/116)) ([2d23d81](https://github.com/damien-robotsix/robotsix-linkedin/commit/2d23d81cdee608c7ff885f1a1b42881afc314028))
+* docstring gap: add docstring to Settings.linkedin_org_scopes_list in src/linkedin_service/config.py (20261105T164149Z-docstring-gap-add-docstring-to-settings-e5df) ([#118](https://github.com/damien-robotsix/robotsix-linkedin/issues/118)) ([4323556](https://github.com/damien-robotsix/robotsix-linkedin/commit/4323556a1fe57bce5046f679caf0c4638262188d))
+* docstring gap: add docstring to Settings.linkedin_scopes_list in src/linkedin_service/config.py (20261105T164147Z-docstring-gap-add-docstring-to-settings-091d) ([#117](https://github.com/damien-robotsix/robotsix-linkedin/issues/117)) ([677d884](https://github.com/damien-robotsix/robotsix-linkedin/commit/677d884e53b7d685161591a31b92bb790edcd447))
+* Reword stale flat-tests header comment in docs/modules.yaml (20261105T172034Z-reword-stale-flat-tests-header-comment-i-4be7) ([#122](https://github.com/damien-robotsix/robotsix-linkedin/issues/122)) ([91c3caa](https://github.com/damien-robotsix/robotsix-linkedin/commit/91c3caa272bf7bed9e6ac723af22fb78d9f2a31f))
+
 ## [0.2.0](https://github.com/damien-robotsix/robotsix-linkedin/compare/v0.1.0...v0.2.0) (2026-10-29)
 
 
