@@ -57,6 +57,7 @@ jobs:
   modules:
     name: Module taxonomy
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: read  # checkout the repository; no write scopes needed
     steps:
