@@ -113,9 +113,8 @@ def _credentials(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_exchange_code_stores_tokens(
-    monkeypatch: pytest.MonkeyPatch, _credentials: None
-) -> None:
+@pytest.mark.usefixtures("_credentials")
+async def test_exchange_code_stores_tokens(monkeypatch: pytest.MonkeyPatch) -> None:
     response = _FakeResponse(
         json_data={
             "access_token": "abc123",
@@ -144,8 +143,9 @@ async def test_exchange_code_state_mismatch_raises() -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.usefixtures("_credentials")
 async def test_exchange_code_rejects_empty_state_without_login(
-    monkeypatch: pytest.MonkeyPatch, _credentials: None
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Login-CSRF: ``state=`` must not match the default empty stored state."""
     client = _patch_client(monkeypatch, _FakeResponse(json_data={"access_token": "x"}))
@@ -157,9 +157,8 @@ async def test_exchange_code_rejects_empty_state_without_login(
 
 
 @pytest.mark.asyncio
-async def test_exchange_code_state_cannot_be_replayed(
-    monkeypatch: pytest.MonkeyPatch, _credentials: None
-) -> None:
+@pytest.mark.usefixtures("_credentials")
+async def test_exchange_code_state_cannot_be_replayed(monkeypatch: pytest.MonkeyPatch) -> None:
     _patch_client(
         monkeypatch,
         _FakeResponse(json_data={"access_token": "abc", "refresh_token": "r", "expires_in": 60}),
@@ -172,9 +171,8 @@ async def test_exchange_code_state_cannot_be_replayed(
 
 
 @pytest.mark.asyncio
-async def test_exchange_code_surfaces_api_error(
-    monkeypatch: pytest.MonkeyPatch, _credentials: None
-) -> None:
+@pytest.mark.usefixtures("_credentials")
+async def test_exchange_code_surfaces_api_error(monkeypatch: pytest.MonkeyPatch) -> None:
     response = _FakeResponse(
         json_data=None,
         status_code=400,
@@ -194,13 +192,13 @@ async def test_exchange_code_surfaces_api_error(
 # ---------------------------------------------------------------------------
 
 
-def test_build_authorize_url_contains_scopes_and_state(
-    monkeypatch: pytest.MonkeyPatch, _credentials: None
-) -> None:
+@pytest.mark.usefixtures("_credentials")
+def test_build_authorize_url_contains_scopes_and_state(monkeypatch: pytest.MonkeyPatch) -> None:
     url = auth.build_authorize_url()
     assert url.startswith(auth.AUTHORIZE_URL)
     assert "w_member_social" in url
-    assert auth.tokens.state and auth.tokens.state in url
+    assert auth.tokens.state
+    assert auth.tokens.state in url
 
 
 def test_validate_redirect_uri_rejects_unknown() -> None:
@@ -323,14 +321,14 @@ def _org_credentials(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings, "linkedin_org_client_secret", SecretStr("org-secret"))
 
 
-def test_build_org_authorize_url_uses_org_credentials(
-    monkeypatch: pytest.MonkeyPatch, _org_credentials: None
-) -> None:
+@pytest.mark.usefixtures("_org_credentials")
+def test_build_org_authorize_url_uses_org_credentials(monkeypatch: pytest.MonkeyPatch) -> None:
     url = auth.build_org_authorize_url()
     assert url.startswith(auth.AUTHORIZE_URL)
     assert "client_id=org-cid" in url
     assert "r_organization_social" in url
-    assert auth.org_tokens.state and auth.org_tokens.state in url
+    assert auth.org_tokens.state
+    assert auth.org_tokens.state in url
 
 
 def test_build_org_authorize_url_raises_without_org_credentials() -> None:
@@ -339,9 +337,8 @@ def test_build_org_authorize_url_raises_without_org_credentials() -> None:
 
 
 @pytest.mark.asyncio
-async def test_exchange_org_code_stores_in_org_token_store(
-    monkeypatch: pytest.MonkeyPatch, _org_credentials: None
-) -> None:
+@pytest.mark.usefixtures("_org_credentials")
+async def test_exchange_org_code_stores_in_org_token_store(monkeypatch: pytest.MonkeyPatch) -> None:
     response = _FakeResponse(
         json_data={
             "access_token": "org-abc123",
@@ -378,8 +375,9 @@ async def test_exchange_org_code_state_mismatch_raises() -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.usefixtures("_org_credentials")
 async def test_exchange_org_code_rejects_empty_state_without_login(
-    monkeypatch: pytest.MonkeyPatch, _org_credentials: None
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     client = _patch_client(monkeypatch, _FakeResponse(json_data={"access_token": "x"}))
     auth.org_tokens.state = ""
@@ -390,9 +388,8 @@ async def test_exchange_org_code_rejects_empty_state_without_login(
 
 
 @pytest.mark.asyncio
-async def test_exchange_org_code_state_cannot_be_replayed(
-    monkeypatch: pytest.MonkeyPatch, _org_credentials: None
-) -> None:
+@pytest.mark.usefixtures("_org_credentials")
+async def test_exchange_org_code_state_cannot_be_replayed(monkeypatch: pytest.MonkeyPatch) -> None:
     _patch_client(
         monkeypatch,
         _FakeResponse(json_data={"access_token": "abc", "refresh_token": "r", "expires_in": 60}),
@@ -410,9 +407,8 @@ async def test_exchange_org_code_state_cannot_be_replayed(
 
 
 @pytest.mark.asyncio
-async def test_refresh_access_token_posts_real_credentials(
-    monkeypatch: pytest.MonkeyPatch, _credentials: None
-) -> None:
+@pytest.mark.usefixtures("_credentials")
+async def test_refresh_access_token_posts_real_credentials(monkeypatch: pytest.MonkeyPatch) -> None:
     response = _FakeResponse(
         json_data={"access_token": "new-access", "refresh_token": "new-refresh", "expires_in": 60}
     )
@@ -435,8 +431,9 @@ async def test_refresh_access_token_posts_real_credentials(
 
 
 @pytest.mark.asyncio
+@pytest.mark.usefixtures("_credentials")
 async def test_refresh_access_token_keeps_refresh_token_when_omitted(
-    monkeypatch: pytest.MonkeyPatch, _credentials: None
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     response = _FakeResponse(json_data={"access_token": "new-access", "expires_in": 60})
     _patch_client(monkeypatch, response)
@@ -449,8 +446,9 @@ async def test_refresh_access_token_keeps_refresh_token_when_omitted(
 
 
 @pytest.mark.asyncio
+@pytest.mark.usefixtures("_org_credentials")
 async def test_refresh_org_access_token_posts_real_credentials(
-    monkeypatch: pytest.MonkeyPatch, _org_credentials: None
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     response = _FakeResponse(
         json_data={
@@ -479,8 +477,9 @@ async def test_refresh_org_access_token_posts_real_credentials(
 
 
 @pytest.mark.asyncio
+@pytest.mark.usefixtures("_org_credentials")
 async def test_refresh_org_access_token_keeps_refresh_token_when_omitted(
-    monkeypatch: pytest.MonkeyPatch, _org_credentials: None
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     response = _FakeResponse(json_data={"access_token": "org-new-access", "expires_in": 60})
     _patch_client(monkeypatch, response)
@@ -502,25 +501,22 @@ def test_require_org_scope_raises_when_org_app_missing() -> None:
         auth._require_org_scope()
 
 
-def test_require_org_scope_raises_without_org_scope(
-    monkeypatch: pytest.MonkeyPatch, _org_credentials: None
-) -> None:
+@pytest.mark.usefixtures("_org_credentials")
+def test_require_org_scope_raises_without_org_scope(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings, "linkedin_org_scopes", "openid profile email")
     with pytest.raises(auth.LinkedInScopeMissingError):
         auth._require_org_scope()
 
 
-def test_require_org_scope_passes_with_org_scope(
-    monkeypatch: pytest.MonkeyPatch, _org_credentials: None
-) -> None:
+@pytest.mark.usefixtures("_org_credentials")
+def test_require_org_scope_passes_with_org_scope(monkeypatch: pytest.MonkeyPatch) -> None:
     # Default linkedin_org_scopes already includes org read scopes.
     auth._require_org_scope()  # must not raise
 
 
 @pytest.mark.asyncio
-async def test_list_organizations_returns_companies(
-    monkeypatch: pytest.MonkeyPatch, _org_credentials: None
-) -> None:
+@pytest.mark.usefixtures("_org_credentials")
+async def test_list_organizations_returns_companies(monkeypatch: pytest.MonkeyPatch) -> None:
     response = _FakeResponse(
         json_data={
             "elements": [
@@ -558,8 +554,9 @@ async def test_list_organizations_returns_companies(
 
 
 @pytest.mark.asyncio
+@pytest.mark.usefixtures("_org_credentials")
 async def test_list_organizations_raises_when_scope_missing(
-    monkeypatch: pytest.MonkeyPatch, _org_credentials: None
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(settings, "linkedin_org_scopes", "openid profile email")
     auth.org_tokens.access_token = "org-token"
@@ -575,9 +572,8 @@ async def test_list_organizations_raises_when_org_app_missing() -> None:
 
 
 @pytest.mark.asyncio
-async def test_get_organization_returns_company(
-    monkeypatch: pytest.MonkeyPatch, _org_credentials: None
-) -> None:
+@pytest.mark.usefixtures("_org_credentials")
+async def test_get_organization_returns_company(monkeypatch: pytest.MonkeyPatch) -> None:
     response = _FakeResponse(
         json_data={
             "id": "987654",
@@ -604,9 +600,8 @@ async def test_get_organization_returns_company(
 
 
 @pytest.mark.asyncio
-async def test_get_organization_surfaces_linkedin_403(
-    monkeypatch: pytest.MonkeyPatch, _org_credentials: None
-) -> None:
+@pytest.mark.usefixtures("_org_credentials")
+async def test_get_organization_surfaces_linkedin_403(monkeypatch: pytest.MonkeyPatch) -> None:
     response = _FakeResponse(
         json_data=None,
         status_code=403,
@@ -633,9 +628,8 @@ async def test_logo_url_never_crashes_on_raw_urn() -> None:
 
 
 @pytest.mark.asyncio
-async def test_exchange_code_persists_tokens_to_file(
-    monkeypatch: pytest.MonkeyPatch, _credentials: None
-) -> None:
+@pytest.mark.usefixtures("_credentials")
+async def test_exchange_code_persists_tokens_to_file(monkeypatch: pytest.MonkeyPatch) -> None:
     response = _FakeResponse(
         json_data={
             "access_token": "abc123",

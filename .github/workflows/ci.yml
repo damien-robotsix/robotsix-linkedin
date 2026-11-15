@@ -45,7 +45,10 @@ jobs:
       # Fleet uv version (python-ci.yml default); pyproject.toml sets no
       # [tool.uv] required-version.
       uv-version: "0.12.5"
-      install-extras: dev
+      # No extras: dev tooling lives in the PEP 735 `dev` group, which
+      # `uv sync --frozen` installs via [tool.uv] default-groups. Empty
+      # overrides the reusable workflow's "tracing" default.
+      install-extras: ""
       cov-package: src/linkedin_service
       check-lock: true
       run-audit: true

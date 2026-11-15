@@ -26,7 +26,6 @@ def _isolated_config(tmp_path, monkeypatch):
     so version history never leaks across tests.
     """
     monkeypatch.setenv("ROBOTSIX_CONFIG_FILE", str(tmp_path / "config.json"))
-    yield
 
 
 @pytest.mark.asyncio

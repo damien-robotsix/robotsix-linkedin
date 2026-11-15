@@ -47,7 +47,7 @@ class Settings(BaseModel):
     # Kept OUTSIDE the repository so tokens survive restarts without being
     # committed. Written 0600 inside a 0700 directory; token values are
     # never logged. Set to an empty string to disable on-disk persistence.
-    linkedin_token_file: str = "~/.config/linkedin-service/tokens.json"
+    linkedin_token_file: str = "~/.config/linkedin-service/tokens.json"  # noqa: S105 (path)
 
     # --- Dedicated org LinkedIn app (Community Management API) ---
     # Reading organization / Company Page data requires LinkedIn's Community
@@ -62,11 +62,11 @@ class Settings(BaseModel):
     # Organization scopes requested during the org app's consent screen.
     # One of r_organization_social / rw_organization_admin is required.
     linkedin_org_scopes: str = "r_organization_social rw_organization_admin"
-    linkedin_org_token_file: str = "~/.config/linkedin-service/org-tokens.json"
+    linkedin_org_token_file: str = "~/.config/linkedin-service/org-tokens.json"  # noqa: S105
 
     # --- Service ---
     # Containerised service: must bind all interfaces to be reachable.
-    host: str = "0.0.0.0"  # nosec B104
+    host: str = "0.0.0.0"  # nosec B104  # noqa: S104
     port: int = 8000
 
     # --- Operator confirmation ---

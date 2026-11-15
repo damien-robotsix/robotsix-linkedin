@@ -166,7 +166,8 @@ async def _login(client: httpx.AsyncClient, flow: _Flow) -> str:
     assert params["redirect_uri"] == [flow.redirect_uri()]
     assert params["response_type"] == ["code"]
     (state,) = params["state"]
-    assert state and flow.store().state == state
+    assert state
+    assert flow.store().state == state
     # Login on one flow never touches the other flow's pending state.
     assert flow.other_store().state == ""
     return state
