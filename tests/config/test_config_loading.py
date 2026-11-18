@@ -121,7 +121,7 @@ def test_missing_config_file_falls_back_to_defaults(tmp_path: Path) -> None:
     settings = load_config(Settings, tmp_path / "nope.json")
 
     assert settings.port == 8000
-    assert settings.host == "0.0.0.0"
+    assert settings.host == "0.0.0.0"  # noqa: S104
     assert settings.linkedin_scopes == "openid profile email w_member_social"
     assert settings.linkedin_org_scopes == "r_organization_social rw_organization_admin"
     assert settings.auth_configured is False
@@ -210,7 +210,8 @@ def test_config_credentials_build_authorize_url(
 
     assert "client_id=cid-xyz" in url
     assert "redirect_uri=https%3A%2F%2Fapp.example.com%2Fauth%2Fcallback" in url
-    assert "openid" in url and "w_member_social" in url
+    assert "openid" in url
+    assert "w_member_social" in url
 
 
 def test_config_credentials_build_org_authorize_url(
@@ -236,7 +237,8 @@ def test_config_credentials_build_org_authorize_url(
 
     assert "client_id=org-cid-xyz" in url
     assert "redirect_uri=https%3A%2F%2Fapp.example.com%2Fauth%2Forg%2Fcallback" in url
-    assert "r_organization_social" in url and "rw_organization_admin" in url
+    assert "r_organization_social" in url
+    assert "rw_organization_admin" in url
 
 
 class _FakeResponse:

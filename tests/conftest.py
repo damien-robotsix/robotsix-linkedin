@@ -28,7 +28,6 @@ def reset_token_state(tmp_path):
     auth.settings.linkedin_org_client_id = SecretStr("")
     auth.settings.linkedin_org_client_secret = SecretStr("")
     auth._pending_confirmations.clear()
-    yield
 
 
 @pytest.fixture

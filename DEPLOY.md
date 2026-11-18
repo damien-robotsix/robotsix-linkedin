@@ -155,8 +155,8 @@ For local development, edit `config/config.json` directly:
 # Edit config/config.json with your LinkedIn app credentials
 # (the template ships with empty placeholders)
 
-pip install ".[dev]"
-python -m linkedin_service
+uv sync  # installs the project plus the dev group
+uv run python -m linkedin_service
 ```
 
 Or with the root `docker-compose.yml` (builds from source, mounts

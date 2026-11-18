@@ -6,7 +6,7 @@ LinkedIn API service for fleet agents — OAuth 2.0 authentication, profile read
 
 ```bash
 # Install
-pip install ".[dev]"
+uv sync  # installs the project plus the dev group
 
 # Configure — edit config/config.json (the single source of truth)
 # or use the Settings API:
@@ -15,7 +15,7 @@ pip install ".[dev]"
 #   GET  /config/schema — JSON Schema for the config model
 
 # Run (stubs auth when credentials are missing)
-python -m linkedin_service
+uv run python -m linkedin_service
 
 # Or with Docker
 docker compose up --build

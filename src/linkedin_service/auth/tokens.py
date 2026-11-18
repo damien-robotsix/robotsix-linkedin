@@ -25,7 +25,7 @@ from ..config import settings
 
 # LinkedIn OAuth 2.0 endpoints (v2)
 AUTHORIZE_URL = "https://www.linkedin.com/oauth/v2/authorization"
-ACCESS_TOKEN_URL = "https://www.linkedin.com/oauth/v2/accessToken"
+ACCESS_TOKEN_URL = "https://www.linkedin.com/oauth/v2/accessToken"  # noqa: S105 (public URL)
 API_BASE = "https://api.linkedin.com/v2"
 
 
