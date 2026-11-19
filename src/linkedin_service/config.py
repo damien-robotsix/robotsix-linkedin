@@ -59,6 +59,13 @@ class Settings(BaseModel):
     linkedin_org_client_id: SecretStr = SecretStr("")
     linkedin_org_client_secret: SecretStr = SecretStr("")
     linkedin_org_redirect_uri: str = "http://localhost:8000/auth/org/callback"
+    # Allowlist of redirect URIs permitted ONLY for the org app's OAuth flow,
+    # in addition to linkedin_org_redirect_uri (which is always allowed).
+    # Space- or comma-separated. Kept separate from
+    # linkedin_allowed_redirect_uris so an org-only callback never widens the
+    # personal app's allowlist (and vice versa) — the two apps hold different
+    # scopes and tokens.
+    linkedin_org_allowed_redirect_uris: str = ""
     # Organization scopes requested during the org app's consent screen.
     # One of r_organization_social / rw_organization_admin is required.
     linkedin_org_scopes: str = "r_organization_social rw_organization_admin"
@@ -113,10 +120,11 @@ class Settings(BaseModel):
         """Redirect URIs permitted by the org-app OAuth flow.
 
         Always includes ``linkedin_org_redirect_uri`` plus any extras
-        declared in ``linkedin_allowed_redirect_uris`` (order preserved,
-        deduped).
+        declared in ``linkedin_org_allowed_redirect_uris`` (order preserved,
+        deduped). Kept separate from the personal app's allowlist so an
+        org-only callback never widens the personal app's accepted URIs.
         """
-        extras = [u for u in re.split(r"[,\s]+", self.linkedin_allowed_redirect_uris) if u]
+        extras = [u for u in re.split(r"[,\s]+", self.linkedin_org_allowed_redirect_uris) if u]
         uris: list[str] = []
         for uri in [self.linkedin_org_redirect_uri, *extras]:
             if uri and uri not in uris:

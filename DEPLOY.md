@@ -34,6 +34,7 @@ credentials — never commit real secrets to the repository.**
   "linkedin_org_client_id": "",
   "linkedin_org_client_secret": "",
   "linkedin_org_redirect_uri": "http://localhost:8000/auth/org/callback",
+  "linkedin_org_allowed_redirect_uris": "",
   "linkedin_org_scopes": "r_organization_social rw_organization_admin",
   "linkedin_org_token_file": "~/.config/linkedin-service/org-tokens.json",
   "host": "0.0.0.0",

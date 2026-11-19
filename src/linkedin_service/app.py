@@ -102,6 +102,10 @@ class _ConfigUpdate(BaseModel):
     linkedin_org_redirect_uri: str | None = Field(
         default=None, description="Org-app OAuth redirect URI."
     )
+    linkedin_org_allowed_redirect_uris: str | None = Field(
+        default=None,
+        description="Space- or comma-separated extra org-app redirect URIs.",
+    )
     linkedin_org_scopes: str | None = Field(default=None, description="Org-app scope list.")
     linkedin_org_token_file: str | None = Field(
         default=None, description="Org token persistence path (outside the repo)."
