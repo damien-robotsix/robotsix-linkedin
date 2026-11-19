@@ -168,6 +168,26 @@ troubleshooting.
 
 ## API Endpoints
 
+### All endpoints
+
+| Method | Path                   | Description                                                      | Auth required          |
+|--------|------------------------|------------------------------------------------------------------|------------------------|
+| GET    | `/health`              | Liveness probe                                                   | No                     |
+| GET    | `/chat-skill`          | Service skill descriptor (SKILL.md) as text/markdown             | No                     |
+| GET    | `/config`              | Current configuration (secrets masked)                           | No                     |
+| PUT    | `/config`              | Update configuration and persist                                 | No                     |
+| GET    | `/config/schema`       | JSON Schema for the config model                                 | No                     |
+| GET    | `/config/versions`     | Config version history, newest first                             | No                     |
+| POST   | `/config/rollback`     | Restore an earlier config version                                | No                     |
+| GET    | `/auth/login`          | Redirect to LinkedIn's consent screen                            | No                     |
+| GET    | `/auth/callback`       | Handle LinkedIn's OAuth redirect; exchange code for tokens       | No                     |
+| GET    | `/auth/org/login`      | Redirect to the org app's consent screen                         | No                     |
+| GET    | `/auth/org/callback`   | Handle the org app's OAuth redirect; exchange code for org token | No                     |
+| GET    | `/me`                  | Authenticated member's profile                                   | OAuth login            |
+| GET    | `/organizations`       | Company Pages the member administers                             | Org-app OAuth          |
+| GET    | `/organizations/{id}`  | Single Company Page's admin-visible details                      | Org-app OAuth          |
+| POST   | `/share`               | Create a text post on the member's feed (state-mutating)         | OAuth login + operator confirmation |
+
 ### Config (Settings panel)
 
 | Method | Path            | Description                            | Auth required |
