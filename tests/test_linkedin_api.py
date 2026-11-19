@@ -211,6 +211,16 @@ def test_validate_redirect_uri_accepts_configured() -> None:
     auth.validate_redirect_uri(settings.linkedin_redirect_uri)
 
 
+def test_validate_org_redirect_uri_rejects_unknown() -> None:
+    with pytest.raises(ValueError, match="allowlist"):
+        auth.validate_org_redirect_uri("https://evil.example.com/callback")
+
+
+def test_validate_org_redirect_uri_accepts_configured() -> None:
+    # The configured org redirect URI is always on the org allowlist.
+    auth.validate_org_redirect_uri(settings.linkedin_org_redirect_uri)
+
+
 # ---------------------------------------------------------------------------
 # Post create
 # ---------------------------------------------------------------------------
