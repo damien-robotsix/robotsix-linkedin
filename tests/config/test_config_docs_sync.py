@@ -3,7 +3,8 @@
 The settings-key set must stay identical across several files: the JSON
 Schema (``config/config.schema.json``, generated from ``Settings``), the
 shipped template (``config/config.json``), the README "Config fields" table,
-the DEPLOY.md config template, and the ``_ConfigUpdate`` model behind
+the DEPLOY.md config template, the chat-skill.md "Config fields" table
+(served by ``GET /chat-skill``), and the ``_ConfigUpdate`` model behind
 ``PUT /config``. Historically nothing failed when these drifted apart (adding
 or renaming a setting meant editing every copy by hand). These tests make any
 divergence fail CI: ``config/config.schema.json`` is the single reference the
@@ -24,6 +25,7 @@ SCHEMA = REPO_ROOT / "config" / "config.schema.json"
 TEMPLATE_CONFIG = REPO_ROOT / "config" / "config.json"
 README = REPO_ROOT / "README.md"
 DEPLOY = REPO_ROOT / "DEPLOY.md"
+CHAT_SKILL = REPO_ROOT / "src" / "linkedin_service" / "chat-skill.md"
 
 _FIELD_CELL = re.compile(r"^\|\s*`([^`]+)`")
 _JSON_FENCE = re.compile(r"^```json\n(.*?)\n```$", re.MULTILINE | re.DOTALL)
@@ -81,6 +83,14 @@ def test_readme_config_fields_table_matches_schema() -> None:
     expected = _schema_field_keys()
     actual = _table_field_keys(README, "### Config fields")
     assert actual == expected, _diff_message("README 'Config fields' table", actual, expected)
+
+
+def test_chat_skill_config_fields_table_matches_schema() -> None:
+    expected = _schema_field_keys()
+    actual = _table_field_keys(CHAT_SKILL, "### Config fields")
+    assert actual == expected, _diff_message(
+        "chat-skill.md 'Config fields' table", actual, expected
+    )
 
 
 def test_deploy_config_template_matches_schema() -> None:
