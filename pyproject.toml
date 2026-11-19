@@ -79,3 +79,11 @@ plugins = ["pydantic.mypy"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+
+[tool.coverage.report]
+# Coverage floor enforced both locally (`uv run pytest --cov=src/linkedin_service`)
+# and in CI (the fleet python-ci.yml tests job passes --cov-fail-under=80, its
+# coverage-threshold default and fleet-wide hard minimum). Keep in sync with that
+# default — measured coverage is comfortably above 80 given the broad tests/ suite.
+fail_under = 80
+show_missing = true
