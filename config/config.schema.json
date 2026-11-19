@@ -54,6 +54,11 @@
       "title": "Linkedin Org Redirect Uri",
       "type": "string"
     },
+    "linkedin_org_allowed_redirect_uris": {
+      "default": "",
+      "title": "Linkedin Org Allowed Redirect Uris",
+      "type": "string"
+    },
     "linkedin_org_scopes": {
       "default": "r_organization_social rw_organization_admin",
       "title": "Linkedin Org Scopes",

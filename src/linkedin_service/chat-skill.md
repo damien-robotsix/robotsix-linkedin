@@ -146,6 +146,7 @@ GET  /config/schema   — JSON Schema for the config model
 | `linkedin_org_client_id` | No | `""` | Dedicated org-app client ID (secret) |
 | `linkedin_org_client_secret` | No | `""` | Dedicated org-app client secret (secret) |
 | `linkedin_org_redirect_uri` | No | `http://localhost:8000/auth/org/callback` | Org-app OAuth redirect URI |
+| `linkedin_org_allowed_redirect_uris` | No | `""` | Space- or comma-separated extra org-app redirect URIs |
 | `linkedin_org_scopes` | No | `r_organization_social rw_organization_admin` | Org-app scopes |
 | `linkedin_org_token_file` | No | `~/.config/linkedin-service/org-tokens.json` | Org token persistence path |
 | `host` | No | `0.0.0.0` | Bind host |

@@ -70,6 +70,7 @@ def test_every_setting_key_loads_from_config_file(tmp_path: Path) -> None:
         "linkedin_org_client_id": "org-cid-from-file",
         "linkedin_org_client_secret": "org-csecret-from-file",
         "linkedin_org_redirect_uri": "https://app.example.com/auth/org/callback",
+        "linkedin_org_allowed_redirect_uris": "https://org-alt.example.com/cb",
         "linkedin_org_scopes": "r_organization_social",
         "linkedin_org_token_file": "/var/lib/linkedin/org-tokens.json",
         "host": "127.0.0.1",
@@ -90,6 +91,7 @@ def test_every_setting_key_loads_from_config_file(tmp_path: Path) -> None:
     assert settings.linkedin_org_client_id.get_secret_value() == "org-cid-from-file"
     assert settings.linkedin_org_client_secret.get_secret_value() == "org-csecret-from-file"
     assert settings.linkedin_org_redirect_uri == "https://app.example.com/auth/org/callback"
+    assert settings.linkedin_org_allowed_redirect_uris == "https://org-alt.example.com/cb"
     assert settings.linkedin_org_scopes == "r_organization_social"
     assert settings.linkedin_org_token_file == "/var/lib/linkedin/org-tokens.json"
     assert settings.host == "127.0.0.1"
@@ -106,7 +108,7 @@ def test_every_setting_key_loads_from_config_file(tmp_path: Path) -> None:
     assert settings.linkedin_org_scopes_list == ["r_organization_social"]
     assert settings.org_allowed_redirect_uris_list == [
         "https://app.example.com/auth/org/callback",
-        "https://alt.example.com/cb",
+        "https://org-alt.example.com/cb",
     ]
     assert settings.org_auth_configured is True
 
@@ -182,6 +184,7 @@ def _apply_settings(monkeypatch: pytest.MonkeyPatch, source: Settings) -> None:
         "linkedin_org_client_id",
         "linkedin_org_client_secret",
         "linkedin_org_redirect_uri",
+        "linkedin_org_allowed_redirect_uris",
         "linkedin_org_scopes",
     ):
         monkeypatch.setattr(auth.settings, field, getattr(source, field))
