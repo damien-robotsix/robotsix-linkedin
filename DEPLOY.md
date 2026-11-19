@@ -44,21 +44,12 @@ credentials — never commit real secrets to the repository.**
 
 ### Field reference
 
-| Field | Required | Description |
-|---|---|---|
-| `linkedin_client_id` | Yes | OAuth 2.0 client ID from the LinkedIn Developer Portal. Secret — masked in API responses, `writeOnly` in the schema. |
-| `linkedin_client_secret` | Yes | OAuth 2.0 client secret. Secret — masked in API responses, `writeOnly` in the schema. |
-| `linkedin_redirect_uri` | Yes | Must exactly match the redirect URL registered on the LinkedIn app. |
-| `linkedin_allowed_redirect_uris` | No | Space- or comma-separated extra redirect URIs. Leave empty if only one redirect URI is needed. |
-| `linkedin_scopes` | No | OAuth scopes requested on the consent screen. Default covers sign-in and posting. |
-| `linkedin_token_file` | No | Path for persisted OAuth tokens. Set to `""` to disable on-disk persistence. |
-| `linkedin_org_client_id` | No | Dedicated org-app (Community Management API) client ID. Secret — masked in API responses, `writeOnly` in the schema. Empty means `/organizations` returns a clear 403. |
-| `linkedin_org_client_secret` | No | Dedicated org-app client secret. Secret — masked in API responses, `writeOnly` in the schema. |
-| `linkedin_org_redirect_uri` | No | Must match a redirect URL registered on the org LinkedIn app. Default `http://localhost:8000/auth/org/callback`. |
-| `linkedin_org_scopes` | No | Org-app scopes. Default `r_organization_social rw_organization_admin`. |
-| `linkedin_org_token_file` | No | Path for persisted org-app tokens. Separate from `linkedin_token_file` so the org flow never overwrites the personal token. |
-| `host` / `port` | No | Service bind address. Default `0.0.0.0:8000`. |
-| `require_operator_confirmation` | No | When `true`, write endpoints require an explicit confirmation token before calling LinkedIn. |
+Every config field — whether it is required, its default value, and what it
+does — is documented once, in the
+[Config fields table in the README](../README.md#config-fields). That table
+is the canonical reference; a CI check keeps its key list in sync with
+[`config/config.schema.json`](config/config.schema.json). The JSON template
+above carries the same fields so an operator can copy it as-is.
 
 > **Two LinkedIn apps:** `/me` and `/share` use the personal app
 > (`linkedin_client_id` / `linkedin_client_secret`). Organization / Company
