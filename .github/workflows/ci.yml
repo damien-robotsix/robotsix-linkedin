@@ -122,5 +122,8 @@ jobs:
     with:
       run-actionlint: true
       run-zizmor: true
+      # Digest-pin lint for Dockerfile FROM lines (lint_dockerfile_pins.py):
+      # fails tag-only FROM refs, so digest pins stay enforced on every PR.
+      dockerfiles: Dockerfile
     permissions:
       contents: read

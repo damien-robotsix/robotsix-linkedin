@@ -1,7 +1,8 @@
 # syntax=docker/dockerfile:1
 
 # ---- builder: resolve the venv from uv.lock (single source of truth) ----
-FROM ghcr.io/astral-sh/uv:python3.14-trixie-slim AS builder
+# tag kept for readability; Dependabot bumps both
+FROM ghcr.io/astral-sh/uv:python3.14-trixie-slim@sha256:da0f1f04404173d7d2fa158112e09624d5a80262efa86c89882b68389dfd44eb AS builder
 
 ENV UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
@@ -27,7 +28,8 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev --no-editable
 
 # ---- runtime: ship only the resolved venv ----
-FROM python:3.14-slim AS runtime
+# tag kept for readability; Dependabot bumps both
+FROM python:3.14-slim@sha256:9aaa474097d094040649f2162a627c0049b408f52138d980916788d80f04802f AS runtime
 
 WORKDIR /app
 
